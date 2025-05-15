@@ -104,6 +104,8 @@ def parse_arguments():
     parser.add_argument('-u', '--urls', type=int, default=15, help='每个股票分析的最大URL数量')
     parser.add_argument('-o', '--output', help='指定输出目录')
     parser.add_argument('-v', '--verbose', action='store_true', help='启用详细日志输出')
+    parser.add_argument('-r', '--risk', choices=['low', 'medium', 'high'], default='low', 
+                       help='投资风险偏好: low(低风险)、medium(中风险)、high(高风险)')
     
     return parser.parse_args()
 
@@ -139,7 +141,7 @@ def read_stock_list(file_path: str) -> List[Tuple[str, Optional[str]]]:
         logger.error(f"读取股票列表文件失败: {str(e)}")
         sys.exit(1)
 
-def single_stock_analysis(agent: StockAgent, stock_code: str, stock_name: Optional[str], max_urls: int):
+def single_stock_analysis(agent: StockAgent, stock_code: str, stock_name: Optional[str], max_urls: int, risk_preference: str = "low"):
     """
     分析单个股票
     
@@ -148,9 +150,13 @@ def single_stock_analysis(agent: StockAgent, stock_code: str, stock_name: Option
         stock_code: 股票代码
         stock_name: 股票名称
         max_urls: 最大分析URL数量
+        risk_preference: 投资风险偏好
     """
     stock_identifier = f"{stock_name}({stock_code})" if stock_name else stock_code
     print_colored_title(f"开始分析股票: {stock_identifier}", Colors.BRIGHT_CYAN)
+    
+    risk_names = {'low': '低风险', 'medium': '中风险', 'high': '高风险'}
+    print(f"风险偏好: {risk_names.get(risk_preference, '低风险')}")
     
     try:
         # 执行分析
@@ -158,7 +164,8 @@ def single_stock_analysis(agent: StockAgent, stock_code: str, stock_name: Option
             stock_code=stock_code,
             stock_name=stock_name,
             max_urls=max_urls,
-            save_results=True
+            save_results=True,
+            risk_preference=risk_preference
         )
         
         if "error" in results:
@@ -182,7 +189,7 @@ def single_stock_analysis(agent: StockAgent, stock_code: str, stock_name: Option
         logger.error(f"分析过程中发生错误: {str(e)}")
         print_colored_title(f"分析过程中发生错误: {str(e)}", Colors.BRIGHT_RED)
 
-def batch_stock_analysis(agent: StockAgent, stocks: List[Tuple[str, Optional[str]]], max_urls_per_stock: int):
+def batch_stock_analysis(agent: StockAgent, stocks: List[Tuple[str, Optional[str]]], max_urls_per_stock: int, risk_preference: str = "low"):
     """
     批量分析多只股票
     
@@ -190,12 +197,16 @@ def batch_stock_analysis(agent: StockAgent, stocks: List[Tuple[str, Optional[str
         agent: StockAgent实例
         stocks: 股票列表，每项为(代码, 名称)元组
         max_urls_per_stock: 每只股票的最大分析URL数量
+        risk_preference: 投资风险偏好
     """
     total_stocks = len(stocks)
     print_colored_title(f"开始批量分析 {total_stocks} 只股票", Colors.BRIGHT_CYAN)
     
+    risk_names = {'low': '低风险', 'medium': '中风险', 'high': '高风险'}
+    print(f"风险偏好: {risk_names.get(risk_preference, '低风险')}")
+    
     start_time = time.time()
-    results = agent.batch_analyze(stocks, max_urls_per_stock=max_urls_per_stock)
+    results = agent.batch_analyze(stocks, max_urls_per_stock=max_urls_per_stock, risk_preference=risk_preference)
     total_time = time.time() - start_time
     
     # 统计成功和失败的数量
@@ -208,17 +219,54 @@ def batch_stock_analysis(agent: StockAgent, stocks: List[Tuple[str, Optional[str
     print(f"成功: {success_count}，失败: {failure_count}")
     print(f"详细结果已保存到输出目录")
 
-def market_analysis(agent: StockAgent):
+def market_analysis(agent: StockAgent, risk_preference: str = "low"):
     """
     市场整体分析
     
     Args:
         agent: StockAgent实例
+        risk_preference: 投资风险偏好
     """
     print_colored_title("开始市场整体分析", Colors.BRIGHT_CYAN)
+    risk_names = {'low': '低风险', 'medium': '中风险', 'high': '高风险'}
+    print(f"风险偏好: {risk_names.get(risk_preference, '低风险')}")
     
-    # 这里可以根据需要编写市场整体分析的逻辑
-    print_colored_title("市场分析功能尚未实现", Colors.BRIGHT_YELLOW)
+    # 获取搜索关键词
+    search_queries = DEFAULT_SEARCH_QUERIES
+    
+    # 执行市场分析
+    try:
+        # 设置较大的URL数量以获取更全面的信息
+        max_urls = 20
+        
+        # 调用异步方法进行市场分析
+        import asyncio
+        results = asyncio.run(agent.analyze_market(
+            search_queries=search_queries,
+            max_urls=max_urls,
+            risk_preference=risk_preference
+        ))
+        
+        if isinstance(results, dict) and "recommendation" in results:
+            recommendation = results["recommendation"]
+            output_file = results.get("output_file", "未知文件路径")
+            
+            # 打印分析结果摘要
+            print_colored_title("市场分析完成", Colors.BRIGHT_GREEN)
+            print(f"分析了 {len(results.get('sources', []))} 个信息源")
+            print(f"完整结果已保存至: {output_file}")
+            
+            # 打印摘要（前500个字符）
+            if recommendation:
+                print_colored_title("投资建议摘要", Colors.BRIGHT_YELLOW)
+                print(f"{recommendation[:500]}...\n")
+        else:
+            print_colored_title("市场分析结果", Colors.BRIGHT_YELLOW)
+            print(results)
+            
+    except Exception as e:
+        logger.error(f"市场分析过程中发生错误: {str(e)}")
+        print_colored_title(f"市场分析过程中发生错误: {str(e)}", Colors.BRIGHT_RED)
 
 def main():
     """主函数"""
@@ -243,16 +291,16 @@ def main():
     try:
         if args.stock:
             # 单个股票分析模式
-            single_stock_analysis(agent, args.stock, args.name, args.urls)
+            single_stock_analysis(agent, args.stock, args.name, args.urls, args.risk)
             
         elif args.batch:
             # 批量分析模式
             stocks = read_stock_list(args.batch)
-            batch_stock_analysis(agent, stocks, args.urls)
+            batch_stock_analysis(agent, stocks, args.urls, args.risk)
             
         elif args.market:
             # 市场整体分析模式
-            market_analysis(agent)
+            market_analysis(agent, args.risk)
     
     except KeyboardInterrupt:
         logger.info("用户中断操作")

@@ -132,12 +132,13 @@ class LLMProcessor:
                 "error": str(e)
             }
     
-    def generate_investment_advice(self, extracted_docs: List[Dict]) -> str:
+    def generate_investment_advice(self, extracted_docs: List[Dict], risk_preference: str = "low") -> str:
         """
         基于提取的信息生成投资建议
         
         Args:
             extracted_docs: 包含提取信息的文档列表
+            risk_preference: 投资风险偏好 ('low', 'medium', 'high')
             
         Returns:
             投资建议文本
@@ -146,7 +147,7 @@ class LLMProcessor:
             logger.warning("没有文档可供分析")
             return "没有足够的信息生成投资建议。"
             
-        logger.info(f"基于 {len(extracted_docs)} 个文档生成投资建议")
+        logger.info(f"基于 {len(extracted_docs)} 个文档生成投资建议，风险偏好: {risk_preference}")
         
         # 构建汇总文本
         summary_text = ""
@@ -177,9 +178,22 @@ class LLMProcessor:
             
         # 使用提示词模板
         system_prompt = INVESTMENT_ADVICE_SYSTEM_PROMPT
+        
+        # 根据风险偏好调整用户提示词
+        risk_descriptions = {
+            "low": "我偏好低风险投资，更看重资金安全和稳定收益，希望投资组合波动性较小。请推荐更多价值型、防御型板块和蓝筹股，以及风险较低的投资策略。",
+            "medium": "我接受中等风险投资，希望在风险可控的前提下获得较好收益，能够承受一定的市场波动。请平衡推荐成长型和价值型投资标的，并提供均衡的投资策略。",
+            "high": "我偏好高风险高收益的投资，能够承受较大的市场波动，追求超额收益。请推荐更多高成长性板块和潜力股，以及进取型的投资策略。"
+        }
+        
+        risk_description = risk_descriptions.get(risk_preference, risk_descriptions["medium"])
+        
         user_prompt = INVESTMENT_ADVICE_USER_PROMPT_TEMPLATE.format(
             summary_text=summary_text
         )
+        
+        # 在用户提示词中添加风险偏好说明
+        user_prompt += f"\n\n{risk_description}"
 
         try:
             response = self.client.chat.completions.create(
@@ -199,12 +213,13 @@ class LLMProcessor:
             logger.error(f"生成投资建议出错: {str(e)}")
             return f"生成投资建议时出错: {str(e)}"
             
-    def generate_market_analysis(self, extracted_docs: List[Dict]) -> str:
+    def generate_market_analysis(self, extracted_docs: List[Dict], risk_preference: str = "low") -> str:
         """
         基于提取的信息生成市场整体分析
         
         Args:
             extracted_docs: The list of documents with extracted information
+            risk_preference: 投资风险偏好 ('low', 'medium', 'high')
             
         Returns:
             The market analysis text
@@ -213,7 +228,7 @@ class LLMProcessor:
             logger.warning("没有文档可供分析")
             return "没有足够的信息生成市场分析。"
             
-        logger.info(f"基于 {len(extracted_docs)} 个文档生成市场整体分析")
+        logger.info(f"基于 {len(extracted_docs)} 个文档生成市场整体分析，风险偏好: {risk_preference}")
         
         # 构建汇总文本
         summary_text = ""
@@ -244,9 +259,22 @@ class LLMProcessor:
             
         # 使用市场分析提示词模板
         system_prompt = MARKET_ANALYSIS_SYSTEM_PROMPT
+        
+        # 根据风险偏好调整用户提示词
+        risk_descriptions = {
+            "low": "我偏好低风险投资，更看重资金安全和稳定收益，希望投资组合波动性较小。请推荐更多价值型、防御型板块和蓝筹股，以及风险较低的投资策略。",
+            "medium": "我接受中等风险投资，希望在风险可控的前提下获得较好收益，能够承受一定的市场波动。请平衡推荐成长型和价值型投资标的，并提供均衡的投资策略。",
+            "high": "我偏好高风险高收益的投资，能够承受较大的市场波动，追求超额收益。请推荐更多高成长性板块和潜力股，以及进取型的投资策略。"
+        }
+        
+        risk_description = risk_descriptions.get(risk_preference, risk_descriptions["medium"])
+        
         user_prompt = MARKET_ANALYSIS_USER_PROMPT_TEMPLATE.format(
             summary_text=summary_text
         )
+        
+        # 在用户提示词中添加风险偏好说明
+        user_prompt += f"\n\n{risk_description}"
 
         try:
             response = self.client.chat.completions.create(
