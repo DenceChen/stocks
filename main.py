@@ -1,0 +1,97 @@
+"""
+股票投资Agent主入口 - 修复导入问题版本
+"""
+import os
+import sys
+import asyncio
+
+# 添加src目录到Python路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
+# 导入必要的模块
+from src.config import get_config, init_logging, DEFAULT_SEARCH_QUERIES
+from src.stock_agent import StockAgent
+
+async def main():
+    """
+    主函数 - 提供简单的命令行界面
+    """
+    # 初始化日志
+    init_logging()
+    
+    print("\n" + "="*50)
+    print("【股票投资智能Agent】".center(48))
+    print("="*50)
+    print("\n该Agent可以自动搜索、爬取和分析股票相关信息，并生成投资建议。\n")
+    
+    # 获取搜索方法
+    print("请选择搜索引擎：")
+    print("1. Google")
+    print("2. 百度")
+    
+    choice = input("\n请输入选项编号 [默认1]: ").strip()
+    search_method = "google" if not choice or choice == "1" else "baidu"
+    
+    # 获取自定义搜索关键词
+    print("\n请输入搜索关键词，多个关键词用逗号分隔")
+    print("如不输入，将使用默认关键词（央行政策、证监会公告、行业分析等）")
+    
+    keywords_input = input("\n搜索关键词: ").strip()
+    queries = None
+    if keywords_input:
+        queries = [k.strip() for k in keywords_input.split(",") if k.strip()]
+    else:
+        queries = DEFAULT_SEARCH_QUERIES
+    
+    # 获取处理的URL数量
+    max_urls_input = input("\n处理的URL数量 [默认15]: ").strip()
+    max_urls = 15
+    if max_urls_input and max_urls_input.isdigit():
+        max_urls = int(max_urls_input)
+    
+    # 获取最大并发数
+    concurrency_input = input("\n爬虫最大并发数 [默认3]: ").strip()
+    max_concurrency = 3
+    if concurrency_input and concurrency_input.isdigit():
+        max_concurrency = int(concurrency_input)
+    
+    print("\n" + "="*50)
+    print("开始运行股票投资Agent...")
+    print("- 搜索引擎: " + ("Google" if search_method == "google" else "百度"))
+    print("- 处理URL数量: " + str(max_urls))
+    print("- 爬虫并发数: " + str(max_concurrency))
+    print("="*50 + "\n")
+    
+    # 获取配置和初始化Agent
+    config = get_config()
+    agent = StockAgent(data_dir=config["DATA_DIR"])
+    
+    # 运行Agent
+    advice = await agent.run(
+        search_queries=queries,
+        search_method=search_method,
+        max_urls=max_urls,
+        max_concurrency=max_concurrency
+    )
+    
+    # 打印投资建议
+    print("\n" + "="*50)
+    print("【股票投资建议】")
+    print("="*50)
+    print(advice)
+    print("="*50)
+    
+    input("\n按Enter键退出...")
+    return 0
+
+if __name__ == "__main__":
+    try:
+        sys.exit(asyncio.run(main()))
+    except KeyboardInterrupt:
+        print("\n程序已被用户中断")
+        sys.exit(1)
+    except Exception as e:
+        print(f"程序运行出错: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1) 
