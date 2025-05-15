@@ -24,9 +24,9 @@ setup(
     description="一个自动化的股票投资分析工具，能够自动搜索、爬取和分析股票相关信息，并生成专业的投资建议。",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Stock Investment Agent Contributors",
-    author_email="your-email@example.com",  # 请更改为你的邮箱
-    url="https://github.com/yourusername/stock-investment-agent",  # 请更改为你的仓库URL
+    author="DenceChen",
+    author_email="dencechen@example.com",  # 请更改为你的邮箱
+    url="https://github.com/DenceChen/stocks",
     packages=find_packages(),
     include_package_data=True,
     install_requires=requirements,
@@ -51,8 +51,8 @@ setup(
         ],
     },
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/stock-investment-agent/issues",
-        "Source": "https://github.com/yourusername/stock-investment-agent",
-        "Documentation": "https://github.com/yourusername/stock-investment-agent/blob/main/README.md",
+        "Bug Reports": "https://github.com/DenceChen/stocks/issues",
+        "Source": "https://github.com/DenceChen/stocks",
+        "Documentation": "https://github.com/DenceChen/stocks/blob/main/README.md",
     },
 ) 

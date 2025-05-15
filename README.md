@@ -9,6 +9,7 @@
 - **专业分析**：利用大型语言模型分析海量信息，生成专业的投资分析
 - **综合建议**：提供全面、具体、可操作的投资建议，包括买入价格、止损点等
 - **批量处理**：支持单只股票深度分析和多只股票批量分析
+- **风险偏好**：支持低、中、高三种风险偏好，提供个性化投资建议
 - **详细日志**：提供彩色日志输出，方便跟踪和调试
 
 ## 安装说明
@@ -16,15 +17,30 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/yourusername/stock-investment-agent.git
-cd stock-investment-agent
+git clone https://github.com/DenceChen/stocks.git
+cd stocks
 ```
 
 ### 2. 创建虚拟环境
 
+#### 使用venv创建（Python内置）
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # 在Windows上使用: venv\Scripts\activate
+```
+
+#### 使用Conda创建
+
+```bash
+# 创建名为stock-env的新环境，指定Python版本为3.8
+conda create -n stock-env python=3.8
+
+# 激活环境
+conda activate stock-env
+
+# 如果需要退出环境
+# conda deactivate
 ```
 
 ### 3. 安装依赖
@@ -38,7 +54,9 @@ pip install -r requirements.txt
 创建一个`.env`文件，添加以下内容：
 
 ```
-OPENAI_API_KEY=your_api_key_here
+LLM_API_KEY=your_api_key_here
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
 ```
 
 ## 使用方法
@@ -53,6 +71,7 @@ python -m stocks.src.main -s AAPL -n "Apple Inc."
 - `-s, --stock`: 股票代码
 - `-n, --name`: 股票名称（可选）
 - `-u, --urls`: 最大处理URL数量（默认为15）
+- `-r, --risk`: 投资风险偏好 (low/medium/high, 默认为low)
 - `-v, --verbose`: 启用详细日志
 - `-o, --output`: 指定输出目录
 
@@ -73,6 +92,12 @@ GOOGL,Alphabet Inc.
 
 ```bash
 python -m stocks.src.main -m
+```
+
+### 快速启动（交互式）
+
+```bash
+python run.py
 ```
 
 ## 项目结构
@@ -132,11 +157,20 @@ stocks/
 }
 ```
 
+### 自定义风险偏好
+
+系统支持三种风险偏好设置，通过`-r`或`--risk`参数指定：
+
+- **low**: 低风险偏好，更注重资金安全和稳定收益
+- **medium**: 中等风险偏好，平衡收益与风险
+- **high**: 高风险偏好，追求高收益，能承受较大波动
+
 ## 常见问题
 
 1. **搜索引擎访问受限**：可能需要使用代理或降低请求频率
 2. **网页爬取失败**：部分网站可能有反爬机制，可尝试调整headers或使用备用方法
 3. **分析不够深入**：可以尝试修改提示词模板或增加搜索范围
+4. **API密钥问题**：确保已设置正确的LLM_API_KEY环境变量或在.env文件中配置
 
 ## 贡献指南
 

@@ -1,0 +1,12 @@
+include *.md
+include LICENSE
+include requirements.txt
+include env.example
+recursive-include stocks/src *.py
+recursive-include stocks/data *.txt
+recursive-include stocks/examples *.txt *.py
+recursive-include stocks/tests *.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[cod]
+recursive-exclude * *.so
+recursive-exclude * .DS_Store 

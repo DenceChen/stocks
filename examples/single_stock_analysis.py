@@ -12,10 +12,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from stocks.src.stock_agent import StockAgent
-from stocks.src.utils import print_colored_title, Colors
+from src.stock_agent import StockAgent
+from src.utils import print_colored_title, Colors
 
-def analyze_single_stock(stock_code, stock_name=None, max_urls=10, output_dir=None):
+def analyze_single_stock(stock_code, stock_name=None, max_urls=10, output_dir=None, risk_preference="low"):
     """
     分析单只股票的示例函数
     
@@ -24,14 +24,19 @@ def analyze_single_stock(stock_code, stock_name=None, max_urls=10, output_dir=No
         stock_name: 股票名称（可选）
         max_urls: 最大处理URL数量
         output_dir: 输出目录（可选）
+        risk_preference: 投资风险偏好 ('low', 'medium', 'high')
     """
     print_colored_title(f"开始分析股票: {stock_name or ''}({stock_code})", Colors.BRIGHT_CYAN)
+    
+    # 显示风险偏好
+    risk_names = {'low': '低风险', 'medium': '中风险', 'high': '高风险'}
+    print(f"风险偏好: {risk_names.get(risk_preference, '低风险')}")
     
     # 初始化Agent
     config = None
     if output_dir:
         # 自定义输出目录
-        from stocks.src.config import get_config
+        from src.config import get_config
         config = get_config()
         config["AGENT_CONFIG"]["OUTPUT_DIR"] = output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -46,7 +51,8 @@ def analyze_single_stock(stock_code, stock_name=None, max_urls=10, output_dir=No
         stock_code=stock_code,
         stock_name=stock_name,
         max_urls=max_urls,
-        save_results=True
+        save_results=True,
+        risk_preference=risk_preference
     )
     
     # 计算处理时间
@@ -79,5 +85,8 @@ if __name__ == "__main__":
     STOCK_CODE = "AAPL"
     STOCK_NAME = "Apple Inc."
     
+    # 可以选择风险偏好: low(低风险)、medium(中风险)、high(高风险)
+    RISK_PREFERENCE = "medium"
+    
     # 执行分析
-    result = analyze_single_stock(STOCK_CODE, STOCK_NAME, max_urls=15) 
+    result = analyze_single_stock(STOCK_CODE, STOCK_NAME, max_urls=15, risk_preference=RISK_PREFERENCE) 

@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 class LLMProcessor:
-    def __init__(self, api_key: str = "sk-1c5050f8829e45d18b1b8d0f124c2219", base_url: str = "https://api.deepseek.com", model: str = "deepseek-chat"):
+    def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com", model: str = "deepseek-chat"):
         """
         初始化LLM处理器
         

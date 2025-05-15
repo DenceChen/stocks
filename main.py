@@ -6,7 +6,7 @@ import sys
 import asyncio
 
 # 添加src目录到Python路径
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 导入必要的模块
 from src.config import get_config, init_logging, DEFAULT_SEARCH_QUERIES
@@ -55,11 +55,29 @@ async def main():
     if concurrency_input and concurrency_input.isdigit():
         max_concurrency = int(concurrency_input)
     
+    # 获取投资风险偏好
+    print("\n请选择您的投资风险偏好：")
+    print("1. 低风险 - 更注重安全性和稳定收益")
+    print("2. 中风险 - 平衡收益与风险")
+    print("3. 高风险 - 追求高收益，能承受较大波动")
+    
+    risk_choice = input("\n请输入选项编号 [默认1]: ").strip()
+    if not risk_choice or risk_choice == "1":
+        risk_preference = "low"
+    elif risk_choice == "2":
+        risk_preference = "medium"
+    elif risk_choice == "3":
+        risk_preference = "high"
+    else:
+        print("无效的选择，使用默认的低风险偏好")
+        risk_preference = "low"
+    
     print("\n" + "="*50)
     print("开始运行股票投资Agent...")
     print("- 搜索引擎: " + ("Google" if search_method == "google" else "百度"))
     print("- 处理URL数量: " + str(max_urls))
     print("- 爬虫并发数: " + str(max_concurrency))
+    print("- 投资风险偏好: " + {"low": "低风险", "medium": "中风险", "high": "高风险"}[risk_preference])
     print("="*50 + "\n")
     
     # 获取配置和初始化Agent
@@ -71,7 +89,8 @@ async def main():
         search_queries=queries,
         search_method=search_method,
         max_urls=max_urls,
-        max_concurrency=max_concurrency
+        max_concurrency=max_concurrency,
+        risk_preference=risk_preference
     )
     
     # 打印投资建议
