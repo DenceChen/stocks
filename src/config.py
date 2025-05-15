@@ -35,7 +35,7 @@ BASE_CONFIG = {
     
     # LLM配置
     "LLM": {
-        "API_KEY": os.getenv("LLM_API_KEY", ""),
+        "API_KEY": os.getenv("LLM_API_KEY", "sk-1c5050f8829e45d18b1b8d0f124c2219"),
         "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),
         "MODEL": os.getenv("LLM_MODEL", "deepseek-chat"),
         "MAX_TOKENS": 4096,

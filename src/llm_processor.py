@@ -25,6 +25,34 @@ from src.prompts import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# 搜索结果筛选提示词
+SEARCH_RESULTS_EVALUATION_SYSTEM_PROMPT = """你是一个专业的投资研究数据筛选专家，特别擅长评估金融和股票信息的价值。你的任务是评估搜索结果对股票投资分析的价值。"""
+
+SEARCH_RESULTS_EVALUATION_USER_TEMPLATE = """我正在进行股票投资分析研究，需要筛选最有价值的信息来源。
+请根据以下搜索结果的标题和摘要，评估其对股票投资分析的价值和相关性，并为每个结果评分（0-10分）。
+
+评分标准:
+- 10-8分: 非常高价值，包含具体的财务数据、专业分析、市场趋势、政策解读等
+- 7-5分: 中等价值，包含一些有用信息但不够深入或全面
+- 4-2分: 低价值，信息较泛泛，缺乏深度或时效性
+- 1-0分: 几乎无价值，与投资分析无关或信息可能误导
+
+====================
+{search_results}
+====================
+
+你只需返回结果的评分列表，按与原始搜索结果相同的顺序，格式为JSON数组，例如:
+```json
+[
+  {{"url": "http://example.com/1", "score": 8, "reason": "包含详细的财务分析"}},
+  {{"url": "http://example.com/2", "score": 3, "reason": "信息过时且缺乏深度"}}
+]
+```
+请确保每个条目都包含原始URL、评分(0-10)和简短的评分理由。
+
+投资风险偏好: {risk_preference}
+"""
+
 class LLMProcessor:
     def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com", model: str = "deepseek-chat"):
         """
@@ -38,6 +66,139 @@ class LLMProcessor:
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
         logger.info(f"LLM处理器初始化完成，使用模型: {model}")
+        
+    def evaluate_search_results(self, search_results: List[Dict[str, str]], risk_preference: str = "low") -> List[Dict]:
+        """
+        评估搜索结果的价值，为每个结果评分
+        
+        Args:
+            search_results: 包含url、title、abstract的字典列表
+            risk_preference: 投资风险偏好 ('low', 'medium', 'high')
+            
+        Returns:
+            包含url、score、reason的字典列表
+        """
+        if not search_results:
+            logger.warning("没有搜索结果可供评估")
+            return []
+            
+        logger.info(f"开始评估 {len(search_results)} 个搜索结果的价值")
+        
+        # 构建搜索结果文本
+        search_results_text = ""
+        for i, result in enumerate(search_results, 1):
+            title = result.get('title', '未知标题')
+            abstract = result.get('abstract', '无摘要')
+            url = result.get('url', '未知URL')
+            
+            search_results_text += f"结果 {i}:\n"
+            search_results_text += f"标题: {title}\n"
+            search_results_text += f"摘要: {abstract}\n"
+            search_results_text += f"URL: {url}\n"
+            search_results_text += "-" * 40 + "\n"
+        
+        # 风险偏好描述
+        risk_descriptions = {
+            "low": "低风险偏好，偏向稳定可靠的信息，关注价值投资、蓝筹股和低风险策略",
+            "medium": "中等风险偏好，平衡关注成长与价值，对不同市场条件下的机会保持开放",
+            "high": "高风险偏好，更关注高成长性、创新性和颠覆性行业的信息，愿意接受更高波动性"
+        }
+        
+        risk_description = risk_descriptions.get(risk_preference, risk_descriptions["medium"])
+        
+        # 使用LLM评估搜索结果
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": SEARCH_RESULTS_EVALUATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": SEARCH_RESULTS_EVALUATION_USER_TEMPLATE.format(
+                        search_results=search_results_text,
+                        risk_preference=risk_description
+                    )}
+                ],
+                stream=False
+            )
+            
+            content = response.choices[0].message.content
+            logger.info("搜索结果评估完成")
+            
+            # 提取JSON评分结果
+            try:
+                # 查找JSON部分并解析
+                import re
+                json_str = re.search(r'```(?:json)?(.*?)```', content, re.DOTALL)
+                if json_str:
+                    evaluations = json.loads(json_str.group(1).strip())
+                else:
+                    evaluations = json.loads(content)
+                    
+                logger.info(f"成功解析评估结果: {len(evaluations)} 个结果")
+                return evaluations
+                
+            except Exception as e:
+                logger.error(f"解析评估结果失败: {str(e)}")
+                logger.debug(f"原始响应内容: {content}")
+                # 尝试返回搜索结果，但所有评分设为5（中等价值）
+                return [{"url": result['url'], "score": 5, "reason": "评分解析失败，默认为中等价值"} 
+                        for result in search_results]
+            
+        except Exception as e:
+            logger.error(f"评估搜索结果时出错: {str(e)}")
+            # 如果评估失败，返回原始结果，但所有评分设为5（中等价值）
+            return [{"url": result['url'], "score": 5, "reason": "评估过程出错，默认为中等价值"} 
+                    for result in search_results]
+    
+    def filter_search_results_by_value(self, 
+                                  search_results: List[Dict[str, str]], 
+                                  evaluations: List[Dict],
+                                  top_n: int = 15,
+                                  min_score: int = 3) -> List[str]:
+        """
+        根据评估结果筛选最有价值的搜索结果
+        
+        Args:
+            search_results: 原始搜索结果列表
+            evaluations: 评估结果列表
+            top_n: 保留的最高评分结果数量
+            min_score: 最低分数阈值，低于此分数的结果将被过滤
+            
+        Returns:
+            筛选后的URL列表
+        """
+        # 创建URL到评分的映射
+        url_to_score = {eval_item['url']: eval_item['score'] for eval_item in evaluations}
+        
+        # 给每个搜索结果添加评分
+        scored_results = []
+        for result in search_results:
+            url = result['url']
+            score = url_to_score.get(url, 0)  # 如果没有评分，默认为0
+            
+            # 只保留达到最低分数阈值的结果
+            if score >= min_score:
+                scored_results.append({
+                    'url': url,
+                    'title': result.get('title', ''),
+                    'abstract': result.get('abstract', ''),
+                    'score': score
+                })
+        
+        # 按评分降序排序
+        scored_results.sort(key=lambda x: x['score'], reverse=True)
+        
+        # 获取评分最高的top_n个URL
+        top_urls = [item['url'] for item in scored_results[:top_n]]
+        
+        logger.info(f"从 {len(search_results)} 个搜索结果中筛选出 {len(top_urls)} 个高价值URL")
+        
+        # 打印被选中的结果及其评分，用于调试
+        for i, item in enumerate(scored_results[:top_n], 1):
+            score_reason = next((eval_item['reason'] for eval_item in evaluations 
+                              if eval_item['url'] == item['url']), "无理由")
+            logger.debug(f"选中 #{i}: {item['title']} (分数: {item['score']}, 原因: {score_reason})")
+            
+        return top_urls
         
     def extract_info_from_document(self, document: Dict) -> Dict:
         """

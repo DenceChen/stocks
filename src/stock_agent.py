@@ -68,6 +68,70 @@ class StockAgent:
         
         logger.info("股票投资Agent初始化完成")
         
+    async def _smart_search_and_filter(self, search_queries: List[str], search_method: str, max_urls: int, risk_preference: str = "low") -> List[str]:
+        """
+        智能搜索并筛选最有价值的URL
+        
+        Args:
+            search_queries: 搜索关键词列表
+            search_method: 搜索方法 ('google' 或 'baidu')
+            max_urls: 最终需要的URL数量
+            risk_preference: 投资风险偏好
+            
+        Returns:
+            筛选后的URL列表
+        """
+        logger.info(f"开始智能搜索并筛选，搜索方法: {search_method}，搜索关键词数量: {len(search_queries)}")
+        
+        # 获取最多100个搜索结果（包含元数据）
+        initial_max_results = min(100, max_urls * 5)  # 最多获取max_urls的5倍，但不超过100
+        
+        # 设置搜索引擎返回更多结果
+        original_max_results = self.search_engine.max_results
+        self.search_engine.max_results = initial_max_results // len(search_queries) + 1
+        
+        try:
+            # 获取包含元数据的搜索结果
+            search_results = self.search_engine.get_search_results_with_metadata(
+                queries=search_queries,
+                method=search_method
+            )
+            
+            logger.info(f"获取了 {len(search_results)} 个搜索结果(含元数据)")
+            
+            if not search_results:
+                logger.warning("没有找到任何搜索结果，将使用普通搜索")
+                # 如果没有搜索结果，回退到普通搜索
+                return self._search(search_queries, search_method, max_urls)
+                
+            # 使用LLM评估搜索结果价值
+            evaluations = self.llm_processor.evaluate_search_results(
+                search_results=search_results,
+                risk_preference=risk_preference
+            )
+            
+            # 筛选最有价值的URL
+            filtered_urls = self.llm_processor.filter_search_results_by_value(
+                search_results=search_results,
+                evaluations=evaluations,
+                top_n=max_urls,
+                min_score=3  # 最低分数阈值，低于此分数的结果将被过滤
+            )
+            
+            logger.info(f"筛选后保留了 {len(filtered_urls)} 个高价值URL")
+            
+            return filtered_urls
+            
+        except Exception as e:
+            logger.error(f"智能搜索筛选过程中发生错误: {str(e)}")
+            logger.warning("回退到普通搜索方法")
+            # 出错时回退到普通搜索
+            return self._search(search_queries, search_method, max_urls)
+            
+        finally:
+            # 恢复原始设置
+            self.search_engine.max_results = original_max_results
+        
     async def analyze_market(self, search_queries: List[str], search_method: str = None, max_urls: int = None, max_concurrency: int = None, risk_preference: str = "low") -> Union[Dict[str, Any], str]:
         """
         分析市场整体情况，生成投资建议
@@ -90,8 +154,14 @@ class StockAgent:
         logger.info(f"开始市场分析，搜索方法: {search_method}，搜索关键词: {search_queries}，风险偏好: {risk_preference}")
         
         try:
-            # 步骤1: 搜索获取URL
-            urls = self._search(search_queries, search_method, max_urls)
+            # 步骤1: 智能搜索并筛选最有价值的URL
+            urls = await self._smart_search_and_filter(
+                search_queries=search_queries,
+                search_method=search_method,
+                max_urls=max_urls,
+                risk_preference=risk_preference
+            )
+            
             if not urls:
                 logger.error("没有找到任何URL，无法继续")
                 return {"error": "无法获取相关信息，请检查搜索关键词或网络连接。"}
@@ -158,8 +228,14 @@ class StockAgent:
         
         logger.info(f"开始运行股票投资Agent，搜索方法: {search_method}，搜索关键词: {search_queries}，风险偏好: {risk_preference}")
         
-        # 步骤1: 搜索获取URL
-        urls = self._search(search_queries, search_method, max_urls)
+        # 步骤1: 智能搜索并筛选最有价值的URL
+        urls = await self._smart_search_and_filter(
+            search_queries=search_queries,
+            search_method=search_method,
+            max_urls=max_urls,
+            risk_preference=risk_preference
+        )
+        
         if not urls:
             logger.error("没有找到任何URL，无法继续")
             return "无法获取相关信息，请检查搜索关键词或网络连接。"
@@ -220,7 +296,7 @@ class StockAgent:
             
         return urls
 
-    def analyze_stock(self, stock_code: str, stock_name: Optional[str] = None, max_urls: int = 15, save_results: bool = True, risk_preference: str = "low") -> Dict[str, Any]:
+    async def analyze_stock(self, stock_code: str, stock_name: Optional[str] = None, max_urls: int = 15, save_results: bool = True, risk_preference: str = "low") -> Dict[str, Any]:
         """
         分析单个股票
         
@@ -278,14 +354,20 @@ class StockAgent:
                     f"{stock_code} {stock_name or ''} 技术革新"
                 ])
             
-            # 执行搜索
-            urls = self._search(search_queries, max_urls=max_urls)
+            # 执行智能搜索
+            urls = await self._smart_search_and_filter(
+                search_queries=search_queries,
+                search_method="google",  # 默认使用Google
+                max_urls=max_urls,
+                risk_preference=risk_preference
+            )
+            
             if not urls:
                 logger.error(f"未找到关于股票 {stock_code} 的相关信息")
                 return {"error": f"未找到关于股票 {stock_code} 的相关信息"}
             
             # 爬取网页内容
-            documents = asyncio.run(self.crawler.crawl_urls(urls))
+            documents = await self.crawler.crawl_urls(urls)
             if not documents:
                 logger.error(f"爬取股票 {stock_code} 相关网页失败")
                 return {"error": f"爬取股票 {stock_code} 相关网页失败"}
