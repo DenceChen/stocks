@@ -49,4 +49,4 @@ cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb 
+*.ipynb .worktrees/
