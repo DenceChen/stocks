@@ -247,7 +247,19 @@ class SearchEngine:
 
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f"MiniMax搜索成功: 获取了 {len(result.get('results', []))} 个结果")
+                # 搜索结果可能在 "organic" 字段中
+                organic = result.get('organic', [])
+                # 标准化为 results 格式
+                normalized_results = []
+                for item in organic:
+                    normalized_results.append({
+                        'title': item.get('title', ''),
+                        'url': item.get('link', ''),
+                        'snippet': item.get('snippet', ''),
+                        'date': item.get('date', '')
+                    })
+                result['results'] = normalized_results
+                logger.info(f"MiniMax搜索成功: 获取了 {len(normalized_results)} 个结果")
                 return result
             else:
                 logger.error(f"MiniMax搜索失败: HTTP {response.status_code}")

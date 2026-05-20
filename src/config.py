@@ -36,7 +36,7 @@ BASE_CONFIG = {
     # LLM配置 - MiniMax
     "LLM": {
         "API_KEY": os.getenv("LLM_API_KEY"),
-        "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.minimaxi.com"),
+        "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.minimaxi.com/v1"),
         "MODEL": os.getenv("LLM_MODEL", "MiniMax-M2.7-highspeed"),
         "MAX_TOKENS": 8192,
         "TEMPERATURE": 0.7,
