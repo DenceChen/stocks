@@ -35,7 +35,7 @@ BASE_CONFIG = {
     
     # LLM配置
     "LLM": {
-        "API_KEY": os.getenv("LLM_API_KEY", "sk-1c5050f8829e45d18b1b8d0f124c2219"),
+        "API_KEY": os.getenv("LLM_API_KEY"),
         "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),
         "MODEL": os.getenv("LLM_MODEL", "deepseek-chat"),
         "MAX_TOKENS": 4096,
@@ -139,10 +139,13 @@ DEFAULT_SEARCH_QUERIES = [
 def get_config() -> Dict[str, Any]:
     """
     获取配置信息
-    
+
     Returns:
         包含配置信息的字典
     """
+    if not os.getenv("LLM_API_KEY"):
+        raise ValueError("LLM_API_KEY environment variable is required")
+
     config = BASE_CONFIG.copy()
     
     # 确保数据目录存在
