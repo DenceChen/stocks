@@ -14,7 +14,10 @@ import requests
 
 # API 配置
 API_KEY = os.getenv("LLM_API_KEY", "sk-cp-LgTiOgPQdjuhkRMDIahYhL3k-Tkmjh3DzqYrn7X7FjiIeHsPdIGEs3iiQtDh_QzpF3M6AYtk8l4qU8iwdN3fQbLjX3IAI5DsIl1Qw1nFOVPabO0kyuVX5Y4")
-BASE_URL = "https://api.minimaxi.com"
+# LLM API - 需要 /v1
+LLM_BASE_URL = "https://api.minimaxi.com/v1"
+# 搜索 API - 不需要 /v1
+SEARCH_BASE_URL = "https://api.minimaxi.com"
 
 HEADERS = {
     "Authorization": f"Bearer {API_KEY}",
@@ -30,7 +33,7 @@ def test_search_api():
 
     try:
         response = requests.post(
-            f"{BASE_URL}/v1/coding_plan/search",
+            f"{SEARCH_BASE_URL}/v1/coding_plan/search",
             json={"q": "Python asyncio 2025"},
             headers=HEADERS,
             timeout=30
@@ -67,7 +70,7 @@ def test_chat_api():
 
     try:
         response = requests.post(
-            f"{BASE_URL}/v1/chat/completions",
+            f"{LLM_BASE_URL}/chat/completions",
             json={
                 "model": "MiniMax-M2.7-highspeed",
                 "messages": [
@@ -110,7 +113,7 @@ def test_with_openai_client():
 
         client = OpenAI(
             api_key=API_KEY,
-            base_url=BASE_URL
+            base_url=LLM_BASE_URL
         )
 
         response = client.chat.completions.create(
@@ -194,7 +197,8 @@ if __name__ == "__main__":
     print("MiniMax API 完整测试")
     print("="*50)
     print(f"API Key: {API_KEY[:20]}...")
-    print(f"Base URL: {BASE_URL}")
+    print(f"LLM Base URL: {LLM_BASE_URL}")
+    print(f"Search Base URL: {SEARCH_BASE_URL}")
 
     os.environ['LLM_API_KEY'] = API_KEY
 
