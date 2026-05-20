@@ -16,6 +16,7 @@ tests/
 ├── test_llm_processor.py    # LLM 处理器测试
 ├── test_data_provider.py    # 数据提供者测试
 ├── test_crawler.py          # 爬虫测试
+├── test_logging.py          # 日志系统测试
 └── conftest.py              # pytest 配置和共享 fixtures
 ```
 
@@ -110,6 +111,26 @@ pytest tests/ --cov=src --cov-report=html
 | `test_webpage_crawling` | 测试网页爬取 | 返回页面内容 |
 | `test_content_extraction` | 测试内容提取 | 提取正文 |
 | `test_error_recovery` | 测试错误恢复 | 重试机制 |
+
+### 7. test_logging.py - 日志系统测试
+
+| 测试名称 | 描述 | 预期结果 |
+|---------|------|---------|
+| `test_format_with_debug_level` | 测试 DEBUG 级别格式化 | 正确包含 DEBUG |
+| `test_format_with_error_level` | 测试 ERROR 级别格式化 | 正确包含 ERROR |
+| `test_setup_logger_returns_logger` | 测试 setup_logger 返回 | 返回 Logger 实例 |
+| `test_setup_logger_with_file` | 测试带文件的日志设置 | 文件 handler 存在 |
+| `test_setup_logger_does_not_duplicate_handlers` | 测试不重复添加 handler | 返回相同实例 |
+| `test_get_logger_returns_logger` | 测试 get_logger 返回 | 返回 Logger 实例 |
+| `test_log_api_call_without_error` | 测试记录成功 API 调用 | 正确记录参数 |
+| `test_log_api_call_with_error` | 测试记录失败 API 调用 | 记录错误信息 |
+| `test_log_function_call_with_args` | 测试记录带参数的函数 | 正确记录参数 |
+| `test_log_function_call_with_result` | 测试记录带返回值的函数 | 正确记录结果 |
+| `test_log_function_call_with_error` | 测试记录错误的函数调用 | 记录错误信息 |
+| `test_get_app_logger` | 测试获取应用日志 | 返回正确 logger |
+| `test_get_api_logger` | 测试获取 API 日志 | 返回正确 logger |
+| `test_get_error_logger` | 测试获取错误日志 | level=ERROR |
+| `test_log_level_from_env` | 测试从环境变量读取级别 | 读取正确值 |
 
 ## 回归测试
 
