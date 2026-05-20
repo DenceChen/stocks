@@ -13,6 +13,7 @@ from src.config import get_config
 from src.search_engine import SearchEngine
 from src.crawler import WebCrawler
 from src.llm_processor import LLMProcessor
+from src.data_provider import DataProvider
 
 # 获取配置
 config = get_config()
@@ -65,7 +66,14 @@ class StockAgent:
             base_url=self.config["LLM"]["BASE_URL"],
             model=self.config["LLM"]["MODEL"]
         )
-        
+
+        # Initialize data provider
+        try:
+            self.data_provider = DataProvider()
+        except ImportError as e:
+            logger.warning(f"Data provider not available: {e}")
+            self.data_provider = None
+
         logger.info("股票投资Agent初始化完成")
         
     async def _smart_search_and_filter(self, search_queries: List[str], search_method: str, max_urls: int, risk_preference: str = "low") -> List[str]:
@@ -386,18 +394,30 @@ class StockAgent:
             
             # 生成投资建议
             recommendation = self.llm_processor.generate_investment_advice(
-                extracted_docs, 
+                extracted_docs,
                 risk_preference=risk_preference
             )
-            
+
+            # Fetch real-time quote and financial data
+            quote = None
+            financials = None
+            if self.data_provider:
+                try:
+                    quote = await self.data_provider.get_quote(stock_code)
+                    financials = await self.data_provider.get_financials(stock_code)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch market data: {e}")
+
             # 计算处理时间
             processing_time = time.time() - start_time
-            
+
             # 保存结果
             results = {
                 "stock_code": stock_code,
                 "stock_name": stock_name,
                 "recommendation": recommendation,
+                "quote": quote,
+                "financials": financials,
                 "processing_time": processing_time,
                 "sources": urls,
                 "risk_preference": risk_preference,
