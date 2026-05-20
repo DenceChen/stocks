@@ -33,14 +33,21 @@ BASE_CONFIG = {
         "RETRY_DELAY": 5,  # 重试延迟(秒)
     },
     
-    # LLM配置
+    # LLM配置 - MiniMax
     "LLM": {
         "API_KEY": os.getenv("LLM_API_KEY"),
-        "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.deepseek.com"),
-        "MODEL": os.getenv("LLM_MODEL", "deepseek-chat"),
-        "MAX_TOKENS": 4096,
-        "TEMPERATURE": 0.7,  # 添加温度参数，控制生成文本的随机性
-        "TOP_P": 0.95,  # 添加top_p参数，控制采样范围
+        "BASE_URL": os.getenv("LLM_BASE_URL", "https://api.minimaxi.com"),
+        "MODEL": os.getenv("LLM_MODEL", "MiniMax-M2.7-highspeed"),
+        "MAX_TOKENS": 8192,
+        "TEMPERATURE": 0.7,
+        "TOP_P": 0.95,
+    },
+
+    # MiniMax搜索配置
+    "MINIMAX_SEARCH": {
+        "BASE_URL": "https://api.minimaxi.com",
+        "API_KEY": os.getenv("LLM_API_KEY"),
+        "ENDPOINT": "/v1/coding_plan/search",
     },
     
     # 日志配置
