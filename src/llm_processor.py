@@ -53,6 +53,24 @@ SEARCH_RESULTS_EVALUATION_USER_TEMPLATE = """我正在进行股票投资分析�
 投资风险偏好: {risk_preference}
 """
 
+# 结构化投资建议提示词
+STRUCTURED_ADVICE_SYSTEM_PROMPT = """你是一个专业的股票投资分析师。你的任务是基于收集到的信息生成结构化的投资建议。
+
+你必须返回JSON格式的分析结果，包含以下字段：
+- summary: 简短的投资总结（100字以内）
+- risk_assessment: 风险评估，包含level(低/中/高)和factors(风险因素数组)
+- recommendations: 建议数组，每个建议包含action(买入/持有/卖出)、target_price、stop_loss、rationale
+- indicators: 关键指标对象，包含PE、ROE等
+- sources: 信息来源URL数组
+
+只返回JSON，不要包含其他文字。"""
+
+STRUCTURED_ADVICE_USER_TEMPLATE = """请分析以下信息，生成结构化的投资建议：
+
+{summary_text}
+
+请以JSON格式返回分析结果。"""
+
 class LLMProcessor:
     def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com", model: str = "deepseek-chat"):
         """
@@ -293,6 +311,26 @@ class LLMProcessor:
                 "error": str(e)
             }
     
+    def _build_summary_text(self, extracted_docs: List[Dict]) -> str:
+        """Build summary text from extracted documents."""
+        summary_text = ""
+        for i, doc in enumerate(extracted_docs, 1):
+            title = doc.get("title", "未知标题")
+            url = doc.get("url", "未知URL")
+            info = doc.get("extracted_info", "无有效信息")
+
+            if isinstance(info, dict):
+                info_text = "\n".join([f"- {k}: {v}" for k, v in info.items()])
+            else:
+                info_text = str(info)
+
+            summary_text += f"文档{i}：【{title}】({url})\n{info_text}\n\n"
+
+        if len(summary_text) > 14000:
+            summary_text = summary_text[:14000] + "..."
+
+        return summary_text
+
     def generate_investment_advice(self, extracted_docs: List[Dict], risk_preference: str = "low") -> str:
         """
         基于提取的信息生成投资建议
@@ -373,7 +411,59 @@ class LLMProcessor:
         except Exception as e:
             logger.error(f"生成投资建议出错: {str(e)}")
             return f"生成投资建议时出错: {str(e)}"
-            
+
+    def generate_investment_advice_structured(self, extracted_docs: List[Dict],
+                                        risk_preference: str = "low") -> Dict[str, Any]:
+        """生成结构化JSON格式的投资建议"""
+        if not extracted_docs:
+            return {"error": "没有足够的文档可供分析"}
+
+        summary_text = self._build_summary_text(extracted_docs)
+
+        risk_descriptions = {
+            "low": "低风险偏好，更看重资金安全和稳定收益",
+            "medium": "中等风险偏好，平衡收益与风险",
+            "high": "高风险偏好，追求高收益"
+        }
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": STRUCTURED_ADVICE_SYSTEM_PROMPT},
+                    {"role": "user", "content": STRUCTURED_ADVICE_USER_TEMPLATE.format(
+                        summary_text=summary_text
+                    ) + f"\n\n投资偏好: {risk_descriptions.get(risk_preference, risk_descriptions['medium'])}"}
+                ],
+                stream=False
+            )
+
+            content = response.choices[0].message.content
+
+            # Parse JSON response
+            try:
+                import re
+                json_match = re.search(r'```(?:json)?\s*(.+?)```', content, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group(1).strip())
+                else:
+                    result = json.loads(content)
+
+                required_fields = ["summary", "risk_assessment", "recommendations"]
+                for field in required_fields:
+                    if field not in result:
+                        raise ValueError(f"Missing required field: {field}")
+
+                return result
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse structured output: {e}")
+                return {"error": "结构化输出解析失败", "raw_content": content}
+
+        except Exception as e:
+            logger.error(f"Error generating structured advice: {e}")
+            return {"error": str(e)}
+
     def generate_market_analysis(self, extracted_docs: List[Dict], risk_preference: str = "low") -> str:
         """
         基于提取的信息生成市场整体分析
