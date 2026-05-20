@@ -54,18 +54,19 @@ SEARCH_RESULTS_EVALUATION_USER_TEMPLATE = """我正在进行股票投资分析�
 """
 
 class LLMProcessor:
-    def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com", model: str = "deepseek-chat"):
+    def __init__(self, api_key: str = "", base_url: str = "https://api.minimaxi.com", model: str = "MiniMax-M2.7-highspeed"):
         """
         初始化LLM处理器
-        
+
         Args:
             api_key: API密钥
             base_url: API基础URL
             model: 使用的模型名称
         """
         self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.base_url = base_url
         self.model = model
-        logger.info(f"LLM处理器初始化完成，使用模型: {model}")
+        logger.info(f"LLM处理器初始化完成，使用模型: {model}, API: {base_url}")
         
     def evaluate_search_results(self, search_results: List[Dict[str, str]], risk_preference: str = "low") -> List[Dict]:
         """

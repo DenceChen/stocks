@@ -10,14 +10,14 @@ import json
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.crawler import Crawler
+from src.crawler import WebCrawler
 
 class TestCrawler(unittest.TestCase):
     """测试Crawler类"""
     
     def setUp(self):
         """每个测试方法运行前执行"""
-        self.crawler = Crawler()
+        self.crawler = WebCrawler()
     
     @patch('src.crawler.trafilatura.fetch_url')
     @patch('src.crawler.trafilatura.extract')
