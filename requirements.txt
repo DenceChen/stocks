@@ -1,3 +1,6 @@
+# Legacy requirements file - prefer pyproject.toml for dependency management
+# This file is kept for backward compatibility
+
 # Core requirements
 requests>=2.25.0
 beautifulsoup4>=4.9.3
@@ -19,4 +22,4 @@ colorama>=0.4.4
 tqdm>=4.62.0
 
 # Data source
-akshare>=1.12.0,<2.0.0 
+akshare>=1.12.0,<2.0.0
