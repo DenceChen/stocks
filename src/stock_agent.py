@@ -13,6 +13,7 @@ from src.config import get_config
 from src.search_engine import SearchEngine
 from src.crawler import WebCrawler
 from src.llm_processor import LLMProcessor
+from src.data_provider import DataProvider
 
 # 获取配置
 config = get_config()
@@ -65,7 +66,14 @@ class StockAgent:
             base_url=self.config["LLM"]["BASE_URL"],
             model=self.config["LLM"]["MODEL"]
         )
-        
+
+        # Initialize data provider
+        try:
+            self.data_provider = DataProvider()
+        except ImportError as e:
+            logger.warning(f"Data provider not available: {e}")
+            self.data_provider = None
+
         logger.info("股票投资Agent初始化完成")
         
     async def _smart_search_and_filter(self, search_queries: List[str], search_method: str, max_urls: int, risk_preference: str = "low") -> List[str]:
@@ -296,17 +304,23 @@ class StockAgent:
             
         return urls
 
+    async def analyze_stock_async(self, stock_code: str, stock_name: Optional[str] = None,
+                              max_urls: int = 15, save_results: bool = True,
+                              risk_preference: str = "low") -> Dict[str, Any]:
+        """Async wrapper for analyze_stock that supports concurrent execution."""
+        return await self.analyze_stock(stock_code, stock_name, max_urls, save_results, risk_preference)
+
     async def analyze_stock(self, stock_code: str, stock_name: Optional[str] = None, max_urls: int = 15, save_results: bool = True, risk_preference: str = "low") -> Dict[str, Any]:
         """
         分析单个股票
-        
+
         Args:
             stock_code: 股票代码
             stock_name: 股票名称
             max_urls: 最大处理URL数量
             save_results: 是否保存结果
             risk_preference: 投资风险偏好
-            
+
         Returns:
             包含分析结果的字典
         """
@@ -380,18 +394,30 @@ class StockAgent:
             
             # 生成投资建议
             recommendation = self.llm_processor.generate_investment_advice(
-                extracted_docs, 
+                extracted_docs,
                 risk_preference=risk_preference
             )
-            
+
+            # Fetch real-time quote and financial data
+            quote = None
+            financials = None
+            if self.data_provider:
+                try:
+                    quote = await self.data_provider.get_quote(stock_code)
+                    financials = await self.data_provider.get_financials(stock_code)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch market data: {e}")
+
             # 计算处理时间
             processing_time = time.time() - start_time
-            
+
             # 保存结果
             results = {
                 "stock_code": stock_code,
                 "stock_name": stock_name,
                 "recommendation": recommendation,
+                "quote": quote,
+                "financials": financials,
                 "processing_time": processing_time,
                 "sources": urls,
                 "risk_preference": risk_preference,
@@ -424,57 +450,61 @@ class StockAgent:
             logger.error(f"分析股票 {stock_code} 过程中发生错误: {str(e)}")
             return {"error": str(e)}
     
-    def batch_analyze(self, stocks: List[Tuple[str, Optional[str]]], max_urls_per_stock: int = 10, risk_preference: str = "low") -> List[Dict[str, Any]]:
+    async def batch_analyze(self, stocks: List[Tuple[str, Optional[str]]],
+                        max_urls_per_stock: int = 10,
+                        risk_preference: str = "low") -> List[Dict[str, Any]]:
         """
-        批量分析多只股票
-        
+        批量分析多只股票（并发执行）
+
         Args:
             stocks: 股票列表，每项为(代码, 名称)元组
             max_urls_per_stock: 每只股票的最大处理URL数量
             risk_preference: 投资风险偏好
-            
+
         Returns:
             包含每只股票分析结果的列表
         """
-        logger.info(f"开始批量分析 {len(stocks)} 只股票，风险偏好: {risk_preference}")
-        
-        results = []
-        for i, (code, name) in enumerate(stocks, 1):
-            logger.info(f"[{i}/{len(stocks)}] 分析股票: {name or ''}({code})")
-            
-            # 分析单个股票
-            stock_result = self.analyze_stock(
+        logger.info(f"Starting concurrent batch analysis of {len(stocks)} stocks")
+
+        tasks = [
+            self.analyze_stock_async(
                 stock_code=code,
                 stock_name=name,
                 max_urls=max_urls_per_stock,
                 save_results=True,
                 risk_preference=risk_preference
             )
-            
-            results.append(stock_result)
-            
-            # 避免过快请求
-            if i < len(stocks):
-                logger.info(f"等待 3 秒后继续下一只股票分析...")
-                time.sleep(3)
-        
-        # 生成汇总报告
+            for code, name in stocks
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Handle exceptions
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"Error analyzing stock {stocks[i]}: {result}")
+                processed_results.append({"error": str(result), "stock_code": stocks[i][0]})
+            else:
+                processed_results.append(result)
+
+        # Generate summary report
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         summary_file = f"batch_analysis_summary_{timestamp}.txt"
         summary_path = os.path.join(self.output_dir, summary_file)
-        
+
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write(f"批量股票分析汇总报告\n")
             f.write(f"分析时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"风险偏好: {risk_preference}\n")
             f.write(f"分析股票数量: {len(stocks)}\n")
             f.write("\n" + "="*50 + "\n\n")
-            
-            for i, result in enumerate(results, 1):
+
+            for i, result in enumerate(processed_results, 1):
                 code = result.get("stock_code", "未知")
                 name = result.get("stock_name", "")
                 stock_name = f"{name}({code})" if name else code
-                
+
                 f.write(f"{i}. {stock_name}\n")
                 if "error" in result:
                     f.write(f"   错误: {result['error']}\n")
@@ -484,9 +514,9 @@ class StockAgent:
                     f.write(f"   摘要: {summary}\n")
                     f.write(f"   详细文件: {os.path.basename(result.get('output_file', ''))}\n")
                 f.write("\n")
-        
+
         logger.info(f"批量分析汇总报告已保存至: {summary_path}")
-        return results
+        return processed_results
 
 async def main():
     """

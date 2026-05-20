@@ -197,10 +197,10 @@ class SearchEngine:
     def get_urls_with_baidu(self, queries: List[str]) -> List[str]:
         """
         批量使用百度搜索获取URL
-
+        
         Args:
             queries: 搜索关键词列表
-
+            
         Returns:
             URL列表
         """
@@ -211,78 +211,6 @@ class SearchEngine:
             all_urls.extend(urls)
             time.sleep(self.sleep_interval)  # 避免过快搜索被限制
         return list(set(all_urls))  # 去重
-
-    def minimax_search(self, query: str) -> Dict[str, Any]:
-        """
-        使用MiniMax API搜索获取信息和原始内容
-
-        Args:
-            query: 搜索关键词
-
-        Returns:
-            包含搜索结果的字典，包含results数组，每个结果有title、url、content、snippet
-        """
-        logger.info(f"MiniMax搜索: {query}")
-
-        try:
-            from src.config import get_config
-            config = get_config()
-            search_config = config.get("MINIMAX_SEARCH", {})
-
-            api_key = search_config.get("API_KEY") or config["LLM"]["API_KEY"]
-            base_url = search_config.get("BASE_URL", "https://api.minimaxi.com")
-            endpoint = search_config.get("ENDPOINT", "/v1/coding_plan/search")
-
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-
-            response = requests.post(
-                f"{base_url}{endpoint}",
-                json={"q": query},
-                headers=headers,
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"MiniMax搜索成功: 获取了 {len(result.get('results', []))} 个结果")
-                return result
-            else:
-                logger.error(f"MiniMax搜索失败: HTTP {response.status_code}")
-                return {"results": []}
-
-        except Exception as e:
-            logger.error(f"MiniMax搜索出错: {str(e)}")
-            return {"results": []}
-
-    def search_with_minimax(self, queries: List[str]) -> List[Dict[str, Any]]:
-        """
-        批量使用MiniMax搜索
-
-        Args:
-            queries: 搜索关键词列表
-
-        Returns:
-            搜索结果列表
-        """
-        all_results = []
-        for query in queries:
-            result = self.minimax_search(query)
-            if "results" in result:
-                all_results.extend(result["results"])
-            time.sleep(self.sleep_interval)
-
-        # 去重基于URL
-        unique_results = []
-        seen_urls = set()
-        for item in all_results:
-            if item.get('url') not in seen_urls:
-                seen_urls.add(item.get('url'))
-                unique_results.append(item)
-
-        return unique_results
 
 if __name__ == "__main__":
     # 测试代码

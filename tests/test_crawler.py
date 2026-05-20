@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.crawler import WebCrawler
 
 class TestCrawler(unittest.TestCase):
-    """测试Crawler类"""
-    
+    """测试WebCrawler类"""
+
     def setUp(self):
         """每个测试方法运行前执行"""
         self.crawler = WebCrawler()
@@ -98,8 +98,8 @@ class TestCrawler(unittest.TestCase):
         # 验证mock被正确调用
         mock_get.assert_called_once()
     
-    @patch('src.crawler.Crawler.extract_content')
-    @patch('src.crawler.Crawler.extract_basic_content')
+    @patch('src.crawler.WebCrawler.extract_content')
+    @patch('src.crawler.WebCrawler.extract_basic_content')
     def test_crawl_urls(self, mock_extract_basic, mock_extract):
         """测试爬取多个URL"""
         # 设置mock返回值
