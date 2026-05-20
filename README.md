@@ -4,9 +4,9 @@
 
 ## 项目特点
 
-- **自动化搜索**：利用Google和百度搜索引擎获取最新的股票相关信息
-- **智能爬虫**：使用trafilatura高效爬取网页内容，自动提取关键信息
-- **专业分析**：利用大型语言模型分析海量信息，生成专业的投资分析
+- **自动化搜索**：利用 Google、百度和 MiniMax 搜索引擎获取最新的股票相关信息
+- **智能爬虫**：使用 trafilatura 高效爬取网页内容，自动提取关键信息
+- **专业分析**：利用 MiniMax 大型语言模型分析海量信息，生成专业的投资分析
 - **综合建议**：提供全面、具体、可操作的投资建议，包括买入价格、止损点等
 - **批量处理**：支持单只股票深度分析和多只股票批量分析
 - **风险偏好**：支持低、中、高三种风险偏好，提供个性化投资建议
@@ -55,9 +55,11 @@ pip install -r requirements.txt
 
 ```
 LLM_API_KEY=your_api_key_here
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.minimaxi.com/v1
+LLM_MODEL=MiniMax-M2.7-highspeed
 ```
+
+或直接复制 `.env.example` 并修改其中的配置。
 
 ## 使用方法
 
@@ -106,17 +108,22 @@ python run.py
 stocks/
 ├── data/              # 数据存储目录
 ├── results/           # 分析结果存储目录
+├── logs/              # 日志文件目录
 ├── src/               # 源代码
 │   ├── __init__.py
-│   ├── search_engine.py  # 搜索引擎模块
+│   ├── search_engine.py  # 搜索引擎模块 (Google/Baidu/MiniMax)
 │   ├── crawler.py     # 网页爬虫模块
 │   ├── llm_processor.py  # LLM处理模块
 │   ├── stock_agent.py # 主Agent模块
 │   ├── config.py      # 配置模块
+│   ├── logging_config.py # 日志配置模块
 │   ├── prompts.py     # 提示词模板
 │   ├── utils.py       # 工具函数
 │   └── main.py        # 主程序入口
+├── tests/             # 测试用例目录
+├── docs/              # 文档目录
 ├── .env               # 环境变量（不包含在版本控制中）
+├── .env.example       # 环境变量示例
 ├── requirements.txt   # 依赖列表
 └── README.md          # 项目说明
 ```
@@ -150,9 +157,12 @@ stocks/
 可以在`config.py`中修改LLM相关参数，以控制分析的深度和创造性：
 
 ```python
-"LLM_CONFIG": {
-    "DEFAULT_MODEL": "gpt-4-turbo",
-    "TEMPERATURE": 0.2,  # 调低更保守，调高更有创造性
+"LLM": {
+    "API_KEY": os.getenv("LLM_API_KEY"),
+    "BASE_URL": "https://api.minimaxi.com/v1",
+    "MODEL": "MiniMax-M2.7-highspeed",
+    "TEMPERATURE": 0.7,  # 调低更保守，调高更有创造性
+    "MAX_TOKENS": 8192,
     # 更多参数
 }
 ```
@@ -164,6 +174,28 @@ stocks/
 - **low**: 低风险偏好，更注重资金安全和稳定收益
 - **medium**: 中等风险偏好，平衡收益与风险
 - **high**: 高风险偏好，追求高收益，能承受较大波动
+
+## 日志与测试
+
+### 日志系统
+
+日志文件位于 `logs/` 目录：
+
+- `logs/app.log` - 应用日志
+- `logs/error.log` - 错误日志
+- `logs/api.log` - API 调用日志
+
+详细规范请参考 [日志系统文档](docs/logging-spec.md)。
+
+### 测试
+
+运行所有测试：
+
+```bash
+pytest tests/ -v
+```
+
+详细测试规范请参考 [测试用例库文档](docs/testing-spec.md)。
 
 ## 常见问题
 
