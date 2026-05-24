@@ -4,7 +4,7 @@ const BASE_URL = '/api/v1'
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000,
+  timeout: 600000, // 10 分钟超时 - AI 分析需要搜索+爬取+LLM
   headers: {
     'Content-Type': 'application/json'
   }
