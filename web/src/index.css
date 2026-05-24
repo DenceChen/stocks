@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #0a0e14;
+  --bg-secondary: #141b24;
+  --bg-tertiary: #1a2332;
+  --border-color: #1e2a38;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --accent-green: #00d4aa;
+  --accent-red: #ff6b6b;
+  --accent-yellow: #ffd93d;
+  --accent-blue: #4dabf7;
+}
+
+body {
+  font-family: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-green);
+}
+
+/* 动画 */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.5s ease-out forwards;
+}
+
+/* 布局 */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 240px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  height: 64px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.content-area {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* 卡片 */
+.dashboard-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.1);
+}
+
+/* 股票代码高亮 */
+.stock-code {
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.stock-name {
+  color: var(--text-secondary);
+}
+
+/* 涨跌颜色 */
+.price-up {
+  color: var(--accent-red);
+}
+
+.price-down {
+  color: var(--accent-green);
+}
+
+/* 渐变背景 */
+.gradient-bg {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+/* 玻璃态效果 */
+.glass-effect {
+  background: rgba(20, 27, 36, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(30, 42, 56, 0.8);
+}
