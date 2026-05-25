@@ -13,6 +13,10 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
   response => response.data,
   error => {
+    if (axios.isCancel(error)) {
+      console.log('Request canceled')
+      return Promise.reject({ name: 'CanceledError', message: 'Request canceled' })
+    }
     console.error('API Error:', error)
     return Promise.reject(error)
   }
@@ -42,21 +46,21 @@ export const api = {
     stock_name?: string
     risk_preference?: string
     max_urls?: number
-  }) => apiClient.post('/analyze/stock', data),
+  }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/stock', data, options),
 
   // 市场分析
   analyzeMarket: (data: {
     search_queries?: string[]
     risk_preference?: string
     max_urls?: number
-  }) => apiClient.post('/analyze/market', data),
+  }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/market', data, options),
 
   // 批量分析
   analyzeBatch: (data: {
     stocks: Array<{ code: string; name?: string }>
     risk_preference?: string
     max_urls_per_stock?: number
-  }) => apiClient.post('/analyze/batch', data),
+  }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/batch', data, options),
 
   // 任务状态
   getTaskStatus: (taskId: string) => apiClient.get(`/tasks/${taskId}`)

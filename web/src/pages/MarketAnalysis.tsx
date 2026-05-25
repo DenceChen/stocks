@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, Button, Result, Spin, Select } from 'antd'
 import { LineChartOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
@@ -10,23 +10,49 @@ export default function MarketAnalysis() {
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [risk, setRisk] = useState('medium')
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   const handleAnalyze = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
-      const response = await api.analyzeMarket({ risk_preference: risk })
-      if (response.success) {
-        setResult(response.data?.recommendation || '分析完成')
-      } else {
-        setError(response.error?.message || '分析失败')
+      const response = await api.analyzeMarket(
+        { risk_preference: risk },
+        { signal: abortControllerRef.current.signal }
+      )
+      if (isMountedRef.current) {
+        if (response.success) {
+          setResult(response.data?.recommendation || '分析完成')
+        } else {
+          setError(response.error?.message || '分析失败')
+        }
       }
     } catch (err: any) {
-      setError(err.message || '网络错误')
+      if (isMountedRef.current && err.name !== 'CanceledError') {
+        setError(err.message || '网络错误')
+      }
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 

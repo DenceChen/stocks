@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, Input, Button, Progress, Table, Tag, Alert } from 'antd'
 import { AppstoreOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
@@ -20,8 +20,25 @@ export default function BatchAnalysis() {
   const [results, setResults] = useState<BatchResult[]>([])
   const [taskId, setTaskId] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const isMountedRef = useRef(true)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   const handleBatchAnalyze = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
     // 解析输入
     const lines = stockInput.trim().split('\n').filter(line => line.trim())
     const stocks = lines.map(line => {
@@ -41,30 +58,36 @@ export default function BatchAnalysis() {
 
     try {
       // 提交批量分析任务
-      const response = await api.analyzeBatch({
-        stocks,
-        risk_preference: 'medium'
-      })
+      const response = await api.analyzeBatch(
+        { stocks, risk_preference: 'medium' },
+        { signal: abortControllerRef.current.signal }
+      )
 
-      if (response.success) {
-        setTaskId(response.data.task_id)
-        setStatus('processing')
-        pollTaskStatus(response.data.task_id)
-      } else {
+      if (isMountedRef.current) {
+        if (response.success) {
+          setTaskId(response.data.task_id)
+          setStatus('processing')
+          pollTaskStatus(response.data.task_id)
+        } else {
+          setStatus('error')
+          setLoading(false)
+        }
+      }
+    } catch (err: any) {
+      if (isMountedRef.current && err.name !== 'CanceledError') {
         setStatus('error')
         setLoading(false)
       }
-    } catch (err) {
-      setStatus('error')
-      setLoading(false)
     }
   }
 
   const pollTaskStatus = async (taskId: string) => {
     const poll = async () => {
+      if (!isMountedRef.current) return
+
       try {
         const response = await api.getTaskStatus(taskId)
-        if (response.success) {
+        if (isMountedRef.current && response.success) {
           const data = response.data
           setStatus(data.status)
 
@@ -84,7 +107,9 @@ export default function BatchAnalysis() {
           }
         }
       } catch (err) {
-        setLoading(false)
+        if (isMountedRef.current) {
+          setLoading(false)
+        }
       }
     }
     poll()

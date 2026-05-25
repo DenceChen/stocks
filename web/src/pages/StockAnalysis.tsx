@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, Row, Col, Form, Input, Select, Button, Result, Spin, Tag, Descriptions } from 'antd'
 import { SearchOutlined, SafetyCertificateOutlined, AlertOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
@@ -28,8 +28,25 @@ export default function StockAnalysis() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [form] = Form.useForm()
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   const handleAnalyze = async (values: { stockCode: string; stockName?: string; risk: string }) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
     setLoading(true)
     setError(null)
     setResult(null)
@@ -39,17 +56,23 @@ export default function StockAnalysis() {
         stock_code: values.stockCode,
         stock_name: values.stockName,
         risk_preference: values.risk
-      })
+      }, { signal: abortControllerRef.current.signal })
 
-      if (response.success) {
-        setResult(response.data)
-      } else {
-        setError(response.error?.message || '分析失败')
+      if (isMountedRef.current) {
+        if (response.success) {
+          setResult(response.data)
+        } else {
+          setError(response.error?.message || '分析失败')
+        }
       }
     } catch (err: any) {
-      setError(err.message || '网络错误')
+      if (isMountedRef.current && err.name !== 'CanceledError') {
+        setError(err.message || '网络错误')
+      }
     } finally {
-      setLoading(false)
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
     }
   }
 
