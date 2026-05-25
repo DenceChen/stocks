@@ -59,14 +59,14 @@ class StockAnalysisRequest(BaseModel):
     stock_code: str = Field(..., min_length=6, max_length=6, description="股票代码")
     stock_name: Optional[str] = Field(None, description="股票名称")
     risk_preference: str = Field("low", pattern="^(low|medium|high)$", description="风险偏好")
-    max_urls: int = Field(15, ge=5, le=50, description="最大处理URL数量")
+    max_urls: int = Field(5, ge=5, le=50, description="最大处理URL数量")
 
 
 class MarketAnalysisRequest(BaseModel):
     """市场分析请求"""
     search_queries: Optional[List[str]] = Field(None, description="自定义搜索关键词")
     risk_preference: str = Field("low", pattern="^(low|medium|high)$", description="风险偏好")
-    max_urls: int = Field(20, ge=5, le=50, description="最大处理URL数量")
+    max_urls: int = Field(5, ge=5, le=50, description="最大处理URL数量")
 
 
 class BatchAnalysisRequest(BaseModel):

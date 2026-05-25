@@ -1,105 +1,59 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Spin, Table, Tag } from 'antd'
-import { ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { Spin, Table } from 'antd'
+import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { api } from '../services/api'
 
-interface MarketOverview {
-  shIndex: number
-  shChange: number
-  szIndex: number
-  szChange: number
-  chgPercent: number
-  turnover: string
+interface MarketData {
+  shIndex: number; shChange: number; shPercent: number
+  szIndex: number; szChange: number; szPercent: number
+  turnover: string; upCount: number; downCount: number
 }
 
-interface RecentStock {
-  code: string
-  name: string
-  price: number
-  change: number
+interface HotStock {
+  code: string; name: string; price: number; change: number; volume: string
+}
+
+interface RecentAnalysis {
+  name: string; code: string; time: string; risk: string
 }
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
-  const [marketData, setMarketData] = useState<MarketOverview | null>(null)
-  const [recentStocks, setRecentStocks] = useState<RecentStock[]>([])
+  const [market, setMarket] = useState<MarketData | null>(null)
+  const [hotStocks, setHotStocks] = useState<HotStock[]>([])
+  const [recent] = useState<RecentAnalysis[]>([
+    { name: '贵州茅台', code: '600519', time: '10分钟前', risk: 'low' },
+    { name: '五粮液', code: '000858', time: '25分钟前', risk: 'low' },
+    { name: '中国平安', code: '601318', time: '1小时前', risk: 'medium' },
+  ])
+
+  const chartData = [
+    { t: '09:30', v: 3100 }, { t: '10:00', v: 3115 },
+    { t: '10:30', v: 3125 }, { t: '11:00', v: 3130 },
+    { t: '11:30', v: 3140 }, { t: '13:00', v: 3145 },
+    { t: '13:30', v: 3148 }, { t: '14:00', v: 3150 },
+    { t: '14:30', v: 3155 }, { t: '15:00', v: 3153 },
+  ]
 
   useEffect(() => {
-    fetchMarketData()
+    setMarket({
+      shIndex: 3215.47, shChange: 26.89, shPercent: 0.85,
+      szIndex: 10835.28, szChange: 120.15, szPercent: 1.12,
+      turnover: '4528亿', upCount: 2847, downCount: 1235,
+    })
+    setHotStocks([
+      { code: '600519', name: '贵州茅台', price: 1680.00, change: 2.35, volume: '54.8亿' },
+      { code: '000858', name: '五粮液', price: 145.20, change: 1.89, volume: '65.6亿' },
+      { code: '601318', name: '中国平安', price: 48.50, change: 1.56, volume: '43.4亿' },
+      { code: '600036', name: '招商银行', price: 35.80, change: 1.23, volume: '18.7亿' },
+      { code: '000001', name: '平安银行', price: 12.35, change: 0.98, volume: '42.6亿' },
+      { code: '600028', name: '中国石化', price: 5.85, change: 0.52, volume: '33.2亿' },
+      { code: '600000', name: '浦发银行', price: 8.45, change: -0.35, volume: '19.8亿' },
+      { code: '601166', name: '兴业银行', price: 17.25, change: -0.52, volume: '71.1亿' },
+    ])
+    setLoading(false)
   }, [])
-
-  const fetchMarketData = async () => {
-    try {
-      // 模拟市场数据
-      setMarketData({
-        shIndex: 3152.98,
-        shChange: 45.32,
-        szIndex: 10234.56,
-        szChange: 123.45,
-        chgPercent: 1.28,
-        turnover: '8926亿'
-      })
-
-      setRecentStocks([
-        { code: '600519', name: '贵州茅台', price: 1680.50, change: 2.35 },
-        { code: '000858', name: '五粮液', price: 145.20, change: -1.28 },
-        { code: '601318', name: '中国平安', price: 48.50, change: 0.85 },
-        { code: '600036', name: '招商银行', price: 35.80, change: 1.52 },
-        { code: '300750', name: '宁德时代', price: 182.30, change: 3.21 },
-      ])
-
-      setLoading(false)
-    } catch (error) {
-      console.error('获取市场数据失败:', error)
-      setLoading(false)
-    }
-  }
-
-  const columns = [
-    {
-      title: '代码',
-      dataIndex: 'code',
-      key: 'code',
-      render: (code: string) => <span className="stock-code">{code}</span>
-    },
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (name: string) => <span className="stock-name">{name}</span>
-    },
-    {
-      title: '最新价',
-      dataIndex: 'price',
-      key: 'price',
-      render: (price: number) => `¥${price.toFixed(2)}`
-    },
-    {
-      title: '涨跌幅',
-      dataIndex: 'change',
-      key: 'change',
-      render: (change: number) => (
-        <span className={change >= 0 ? 'price-up' : 'price-down'}>
-          {change >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-          {Math.abs(change).toFixed(2)}%
-        </span>
-      )
-    }
-  ]
-
-  const mockChartData = [
-    { time: '09:30', index: 3100 },
-    { time: '10:00', index: 3115 },
-    { time: '10:30', index: 3125 },
-    { time: '11:00', index: 3130 },
-    { time: '11:30', index: 3140 },
-    { time: '13:00', index: 3145 },
-    { time: '13:30', index: 3148 },
-    { time: '14:00', index: 3150 },
-    { time: '14:30', index: 3155 },
-    { time: '15:00', index: 3153 },
-  ]
 
   if (loading) {
     return (
@@ -109,119 +63,168 @@ export default function Dashboard() {
     )
   }
 
+  const columns = [
+    {
+      title: '排名', key: 'rank', width: 50,
+      render: (_: any, __: any, i: number) => (
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 11, color: i < 3 ? 'var(--cyan)' : 'var(--text-dim)',
+          fontWeight: i < 3 ? 600 : 400,
+        }}>{i + 1}</span>
+      )
+    },
+    { title: '代码', dataIndex: 'code', key: 'code', render: (v: string) => <span className="stock-code">{v}</span> },
+    { title: '名称', dataIndex: 'name', key: 'name' },
+    {
+      title: '最新价', dataIndex: 'price', key: 'price',
+      render: (v: number) => <span style={{ fontFamily: 'var(--font-mono)' }}>¥{v.toFixed(2)}</span>
+    },
+    {
+      title: '涨跌幅', dataIndex: 'change', key: 'change',
+      render: (v: number) => (
+        <span className={v >= 0 ? 'price-up' : 'price-down'} style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
+          {v >= 0 ? '+' : ''}{v.toFixed(2)}%
+        </span>
+      )
+    },
+    {
+      title: '成交额', dataIndex: 'volume', key: 'vol',
+      render: (v: string) => <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{v}</span>
+    },
+  ]
+
+  const indexCards = market ? [
+    { label: '上证指数', value: market.shIndex, change: market.shChange, percent: market.shPercent, unit: '点' },
+    { label: '深证成指', value: market.szIndex, change: market.szChange, percent: market.szPercent, unit: '点' },
+    { label: '成交额', value: market.turnover, change: null, percent: null, unit: '' },
+    { label: '上涨/下跌', value: `${market.upCount}`, sub: `/${market.downCount}`, change: null, percent: null, unit: '家' },
+  ] : []
+
   return (
-    <div className="animate-slide-in">
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px' }}>
-          市场概览
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          实时追踪 A 股市场动态
-        </p>
+    <div className="anim-slide-up">
+      <div className="section-header">
+        <h2>市场仪表盘</h2>
+        <p>实时监控市场动态 <span className="pulse-dot" style={{ marginLeft: 8 }} /></p>
       </div>
 
-      {/* 指数卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col xs={24} sm={12} md={6}>
-          <div className="dashboard-card">
-            <Statistic
-              title={<span style={{ color: 'var(--text-secondary)' }}>上证指数</span>}
-              value={marketData?.shIndex}
-              precision={2}
-              suffix={<span style={{ fontSize: '14px' }}>点</span>}
-            />
-            <div className={marketData!.shChange >= 0 ? 'price-up' : 'price-down'} style={{ marginTop: '8px' }}>
-              {marketData!.shChange >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-              {' '}{Math.abs(marketData!.shChange).toFixed(2)} ({marketData!.shChange >= 0 ? '+' : ''}{marketData!.chgPercent.toFixed(2)}%)
+      {/* Index Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+        {indexCards.map((card, i) => (
+          <div key={i} className={`card card-glow anim-slide-up stagger-${i + 1}`} style={{ position: 'relative', overflow: 'hidden' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: .5, textTransform: 'uppercase' }}>
+              {card.label}
+              {i < 2 && <span className="pulse-dot" style={{ marginLeft: 6, width: 4, height: 4 }} />}
             </div>
-          </div>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <div className="dashboard-card">
-            <Statistic
-              title={<span style={{ color: 'var(--text-secondary)' }}>深证成指</span>}
-              value={marketData?.szIndex}
-              precision={2}
-              suffix={<span style={{ fontSize: '14px' }}>点</span>}
-            />
-            <div className={marketData!.szChange >= 0 ? 'price-up' : 'price-down'} style={{ marginTop: '8px' }}>
-              {marketData!.szChange >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-              {' '}{Math.abs(marketData!.szChange).toFixed(2)}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{
+                fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 700, color: 'var(--text-bright)',
+                lineHeight: 1,
+              }}>
+                {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
+              </span>
+              {card.sub && <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 16 }}>{card.sub}</span>}
+              {card.unit && <span style={{ fontSize: 12, color: 'var(--text-dim)', marginLeft: 2 }}>{card.unit}</span>}
             </div>
+            {card.change !== null && (
+              <div className={card.change >= 0 ? 'price-up' : 'price-down'} style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                {card.change >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                {Math.abs(card.change).toFixed(2)}
+                <span style={{ opacity: .7 }}>({card.change >= 0 ? '+' : ''}{card.percent!.toFixed(2)}%)</span>
+              </div>
+            )}
           </div>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <div className="dashboard-card">
-            <Statistic
-              title={<span style={{ color: 'var(--text-secondary)' }}>成交额</span>}
-              value={marketData?.turnover}
-              prefix={<ThunderboltOutlined />}
-            />
-            <div style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>
-              市场活跃度较高
-            </div>
-          </div>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <div className="dashboard-card">
-            <Statistic
-              title={<span style={{ color: 'var(--text-secondary)' }}>上涨家数</span>}
-              value={3245}
-              valueStyle={{ color: 'var(--accent-green)' }}
-            />
-            <Tag color="green" style={{ marginTop: '8px' }}>强势</Tag>
-          </div>
-        </Col>
-      </Row>
+        ))}
+      </div>
 
-      {/* 图表和表格 */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={14}>
-          <div className="dashboard-card" style={{ height: '400px' }}>
-            <h3 style={{ marginBottom: '16px' }}>上证指数走势</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mockChartData}>
-                <XAxis
-                  dataKey="time"
-                  axisLine={{ stroke: 'var(--border-color)' }}
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-                />
-                <YAxis
-                  domain={['auto', 'auto']}
-                  axisLine={{ stroke: 'var(--border-color)' }}
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px'
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="index"
-                  stroke="var(--accent-green)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* Chart + Table */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginBottom: 24 }}>
+        <div className="card card-glow" style={{ padding: 0 }}>
+          <div style={{ padding: '16px 20px 8px' }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--text-bright)' }}>
+              🔥 热门股票
+            </span>
           </div>
-        </Col>
-        <Col xs={24} lg={10}>
-          <div className="dashboard-card" style={{ height: '400px' }}>
-            <h3 style={{ marginBottom: '16px' }}>热门股票</h3>
-            <Table
-              dataSource={recentStocks}
-              columns={columns}
-              rowKey="code"
-              pagination={false}
-              size="small"
-            />
+          <Table dataSource={hotStocks} columns={columns} rowKey="code" pagination={false} size="small" />
+        </div>
+        <div className="card card-glow">
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--text-bright)' }}>
+              上证走势
+            </span>
           </div>
-        </Col>
-      </Row>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#00e5cc" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#00e5cc" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="t" axisLine={false} tickLine={false} tick={{ fill: '#3a4a5e', fontSize: 11 }} />
+              <YAxis hide domain={['data - 20', 'data + 20']} />
+              <Tooltip
+                contentStyle={{
+                  background: 'rgba(11, 17, 32, 0.95)', border: '1px solid rgba(0,229,204,0.2)',
+                  borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12,
+                }}
+                labelStyle={{ color: 'var(--text-muted)' }}
+                itemStyle={{ color: 'var(--cyan)' }}
+              />
+              <Area type="monotone" dataKey="v" stroke="#00e5cc" strokeWidth={2} fill="url(#areaGrad)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Recent + Quick Actions */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="card card-glow">
+          <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--text-bright)', marginBottom: 16 }}>
+            最近分析
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {recent.map((item, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 12px', borderRadius: 8,
+                background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+              }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-bright)' }}>{item.name}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>{item.code}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{item.time}</div>
+                  <span className={`tag tag-risk-${item.risk}`}>
+                    {item.risk === 'low' ? '低风险' : item.risk === 'medium' ? '中风险' : '高风险'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card card-glow">
+          <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--text-bright)', marginBottom: 16 }}>
+            快速操作
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[
+              { icon: '📊', label: '个股分析', path: '/stock' },
+              { icon: '🌐', label: '市场分析', path: '/market' },
+              { icon: '📦', label: '批量分析', path: '/batch' },
+              { icon: '📈', label: '实时行情', path: '/quotes' },
+            ].map((action, i) => (
+              <div key={i} className="action-card" onClick={() => window.location.href = action.path}>
+                <div className="action-icon">{action.icon}</div>
+                <div className="action-label">{action.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

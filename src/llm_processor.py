@@ -81,7 +81,7 @@ class LLMProcessor:
             base_url: API基础URL
             model: 使用的模型名称
         """
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
         self.base_url = base_url
         self.model = model
         logger.info(f"LLM处理器初始化完成，使用模型: {model}, API: {base_url}")
@@ -245,8 +245,8 @@ class LLMProcessor:
         logger.info(f"从文档提取信息: {title} ({url})")
         
         # 限制内容长度，避免超出模型最大输入长度
-        if len(content) > 14000:  # 给系统和用户提示词预留空间
-            content = content[:14000] + "..."
+        if len(content) > 3000:
+            content = content[:3000] + "..."
             logger.info(f"文档内容已截断: {title}")
         
         # 根据URL和标题决定使用哪种提示词
@@ -372,10 +372,10 @@ class LLMProcessor:
             summary_text += f"文档{i}：【{title}】({url})\n{info_text}\n\n"
             
         # 限制汇总文本长度
-        if len(summary_text) > 14000:
-            summary_text = summary_text[:14000] + "..."
+        if len(summary_text) > 8000:
+            summary_text = summary_text[:8000] + "..."
             logger.info("汇总文本已截断")
-            
+
         # 使用提示词模板
         system_prompt = INVESTMENT_ADVICE_SYSTEM_PROMPT
         

@@ -19,7 +19,7 @@ BASE_CONFIG = {
     
     # 搜索引擎配置
     "SEARCH_ENGINE": {
-        "DEFAULT_METHOD": "google",  # 'google' 或 'baidu'
+        "DEFAULT_METHOD": "minimax",  # 'google', 'baidu' 或 'minimax'
         "MAX_RESULTS": 15,  # 增加默认结果数量
         "SLEEP_INTERVAL": 2.0,  # 搜索请求间隔时间(秒)
     },

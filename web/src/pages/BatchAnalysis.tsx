@@ -1,16 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { Card, Input, Button, Progress, Table, Tag, Alert } from 'antd'
+import { Card, Input, Button, Progress, Table, Tag } from 'antd'
 import { AppstoreOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
 
 const { TextArea } = Input
 
 interface BatchResult {
-  stock_code: string
-  stock_name: string
-  recommendation: string | null
-  status: 'success' | 'error'
-  error?: string
+  stock_code: string; stock_name: string; recommendation: string | null
+  status: 'success' | 'error'; error?: string
 }
 
 export default function BatchAnalysis() {
@@ -18,214 +15,111 @@ export default function BatchAnalysis() {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<BatchResult[]>([])
-  const [taskId, setTaskId] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
-  const isMountedRef = useRef(true)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-    }
+    mountedRef.current = true
+    return () => { mountedRef.current = false; abortRef.current?.abort() }
   }, [])
 
   const handleBatchAnalyze = async () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
-
-    // 解析输入
-    const lines = stockInput.trim().split('\n').filter(line => line.trim())
-    const stocks = lines.map(line => {
-      const parts = line.split(/[,\s]+/)
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+    const stocks = stockInput.trim().split('\n').filter(l => l.trim()).map(l => {
+      const parts = l.split(/[,\s]+/)
       return { code: parts[0], name: parts[1] || '' }
     }).filter(s => s.code)
+    if (!stocks.length) return
 
-    if (stocks.length === 0) {
-      return
-    }
-
-    setLoading(true)
-    setProgress(0)
-    setResults([])
-    setTaskId(null)
-    setStatus('pending')
+    setLoading(true); setProgress(0); setResults([]); setStatus('pending')
 
     try {
-      // 提交批量分析任务
-      const response = await api.analyzeBatch(
-        { stocks, risk_preference: 'medium' },
-        { signal: abortControllerRef.current.signal }
-      )
-
-      if (isMountedRef.current) {
-        if (response.success) {
-          setTaskId(response.data.task_id)
-          setStatus('processing')
-          pollTaskStatus(response.data.task_id)
-        } else {
-          setStatus('error')
-          setLoading(false)
-        }
+      const res = await api.analyzeBatch({ stocks, risk_preference: 'medium' }, { signal: abortRef.current.signal })
+      if (mountedRef.current) {
+        if (res.success) { setStatus('processing'); pollTask(res.data.task_id) }
+        else { setStatus('error'); setLoading(false) }
       }
     } catch (err: any) {
-      if (isMountedRef.current && err.name !== 'CanceledError') {
-        setStatus('error')
-        setLoading(false)
-      }
+      if (mountedRef.current && err.name !== 'CanceledError') { setStatus('error'); setLoading(false) }
     }
   }
 
-  const pollTaskStatus = async (taskId: string) => {
+  const pollTask = (taskId: string) => {
     const poll = async () => {
-      if (!isMountedRef.current) return
-
+      if (!mountedRef.current) return
       try {
-        const response = await api.getTaskStatus(taskId)
-        if (isMountedRef.current && response.success) {
-          const data = response.data
-          setStatus(data.status)
-
-          if (data.status === 'completed') {
-            setProgress(100)
-            setResults(data.results || [])
-            setLoading(false)
-          } else if (data.status === 'processing') {
-            const p = data.progress || 0
-            setProgress(p)
-            setResults(data.results || [])
-            setTimeout(poll, 2000)
-          } else if (data.status === 'error') {
-            setLoading(false)
-          } else {
-            setTimeout(poll, 2000)
-          }
+        const res = await api.getTaskStatus(taskId)
+        if (mountedRef.current && res.success) {
+          const d = res.data
+          setStatus(d.status)
+          if (d.status === 'completed') { setProgress(100); setResults(d.results || []); setLoading(false) }
+          else if (d.status === 'processing') { setProgress(d.progress || 0); setResults(d.results || []); setTimeout(poll, 2000) }
+          else if (d.status === 'error') setLoading(false)
+          else setTimeout(poll, 2000)
         }
-      } catch (err) {
-        if (isMountedRef.current) {
-          setLoading(false)
-        }
-      }
+      } catch { if (mountedRef.current) setLoading(false) }
     }
     poll()
   }
 
   const columns = [
+    { title: '股票代码', dataIndex: 'stock_code', key: 'code', render: (v: string) => <span className="stock-code">{v}</span> },
+    { title: '名称', dataIndex: 'stock_name', key: 'name' },
     {
-      title: '股票代码',
-      dataIndex: 'stock_code',
-      key: 'code',
-      render: (code: string) => <span className="stock-code">{code}</span>
+      title: '状态', dataIndex: 'status', key: 'status',
+      render: (v: string) => <Tag color={v === 'success' ? 'green' : 'red'}>{v === 'success' ? '成功' : '失败'}</Tag>
     },
     {
-      title: '名称',
-      dataIndex: 'stock_name',
-      key: 'name'
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'success' ? 'green' : 'red'}>
-          {status === 'success' ? '成功' : '失败'}
-        </Tag>
-      )
-    },
-    {
-      title: '建议摘要',
-      dataIndex: 'recommendation',
-      key: 'recommendation',
-      render: (text: string | null) => text ? (
-        <span style={{
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden'
-        }}>
-          {text}
-        </span>
+      title: '建议摘要', dataIndex: 'recommendation', key: 'rec',
+      render: (v: string | null) => v ? (
+        <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 12, color: 'var(--text-muted)' }}>{v}</span>
       ) : '-'
-    }
+    },
   ]
 
   return (
-    <div className="animate-slide-in">
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px' }}>
-          批量分析
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          一次分析多只股票，每行一个，格式: 代码,名称
-        </p>
+    <div className="anim-slide-up">
+      <div className="section-header">
+        <h2>批量分析</h2>
+        <p>同时分析多只股票，每行一个，格式: 代码,名称</p>
       </div>
 
-      <Card className="dashboard-card" style={{ marginBottom: '24px' }}>
-        <TextArea
-          rows={6}
-          placeholder={`600519,贵州茅台
-000858,五粮液
-601318,中国平安
-600036,招商银行
-300750,宁德时代`}
-          value={stockInput}
-          onChange={e => setStockInput(e.target.value)}
-          style={{
-            background: 'var(--bg-tertiary)',
-            fontFamily: 'monospace'
-          }}
-        />
-        <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            loading={loading}
-            onClick={handleBatchAnalyze}
-            style={{
-              background: 'var(--accent-green)',
-              borderColor: 'var(--accent-green)'
-            }}
-          >
+      <div className="card card-glow" style={{ marginBottom: 24 }}>
+        <TextArea rows={6} placeholder={`600519,贵州茅台\n000858,五粮液\n601318,中国平安`}
+          value={stockInput} onChange={e => setStockInput(e.target.value)}
+          style={{ background: 'var(--bg-surface)', fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 12 }} />
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={handleBatchAnalyze}>
             开始批量分析
           </Button>
-          <Button
-            icon={<DeleteOutlined />}
-            onClick={() => setStockInput('')}
-          >
-            清空
-          </Button>
+          <Button icon={<DeleteOutlined />} onClick={() => setStockInput('')}>清空</Button>
         </div>
-      </Card>
+      </div>
 
       {loading && (
-        <Card className="dashboard-card" style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-            <AppstoreOutlined style={{ fontSize: '24px', color: 'var(--accent-green)' }} />
-            <span>批量分析进行中...</span>
+        <div className="card card-glow" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <AppstoreOutlined style={{ fontSize: 18, color: 'var(--cyan)' }} />
+            <span style={{ fontFamily: 'var(--font-body)', fontWeight: 500 }}>批量分析进行中...</span>
           </div>
           <Progress percent={progress} status="active" />
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
             状态: {status}
-          </p>
-        </Card>
+          </span>
+        </div>
       )}
 
       {results.length > 0 && (
-        <Card className="dashboard-card animate-slide-in">
-          <h3 style={{ marginBottom: '16px' }}>分析结果</h3>
-          <Table
-            dataSource={results}
-            columns={columns}
-            rowKey="stock_code"
-            pagination={false}
-            size="small"
-          />
-        </Card>
+        <div className="card card-glow anim-slide-up" style={{ padding: 0 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 14, color: 'var(--text-bright)' }}>
+              分析结果
+            </span>
+          </div>
+          <Table dataSource={results} columns={columns} rowKey="stock_code" pagination={false} size="small" />
+        </div>
       )}
     </div>
   )

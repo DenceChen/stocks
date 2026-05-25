@@ -78,64 +78,88 @@ class StockAgent:
         
     async def _smart_search_and_filter(self, search_queries: List[str], search_method: str, max_urls: int, risk_preference: str = "low") -> List[str]:
         """
-        智能搜索并筛选最有价值的URL
-        
+        智能搜索并筛选最有价值的URL，支持回退机制
+
         Args:
             search_queries: 搜索关键词列表
-            search_method: 搜索方法 ('google' 或 'baidu')
+            search_method: 搜索方法 ('google', 'baidu' 或 'minimax')
             max_urls: 最终需要的URL数量
             risk_preference: 投资风险偏好
-            
+
         Returns:
             筛选后的URL列表
         """
         logger.info(f"开始智能搜索并筛选，搜索方法: {search_method}，搜索关键词数量: {len(search_queries)}")
-        
+
+        # 定义搜索方法的回退顺序
+        fallback_methods = {
+            "minimax": ["baidu", "google"],
+            "baidu": ["minimax", "google"],
+            "google": ["minimax", "baidu"]
+        }
+
+        # 当前方法和回退方法列表
+        methods_to_try = [search_method] + fallback_methods.get(search_method, ["minimax", "baidu"])
+
         # 获取最多100个搜索结果（包含元数据）
         initial_max_results = min(100, max_urls * 5)  # 最多获取max_urls的5倍，但不超过100
-        
+
         # 设置搜索引擎返回更多结果
         original_max_results = self.search_engine.max_results
         self.search_engine.max_results = initial_max_results // len(search_queries) + 1
-        
+
         try:
-            # 获取包含元数据的搜索结果
-            search_results = self.search_engine.get_search_results_with_metadata(
-                queries=search_queries,
-                method=search_method
-            )
-            
-            logger.info(f"获取了 {len(search_results)} 个搜索结果(含元数据)")
-            
-            if not search_results:
-                logger.warning("没有找到任何搜索结果，将使用普通搜索")
-                # 如果没有搜索结果，回退到普通搜索
-                return self._search(search_queries, search_method, max_urls)
-                
-            # 使用LLM评估搜索结果价值
-            evaluations = self.llm_processor.evaluate_search_results(
-                search_results=search_results,
-                risk_preference=risk_preference
-            )
-            
-            # 筛选最有价值的URL
-            filtered_urls = self.llm_processor.filter_search_results_by_value(
-                search_results=search_results,
-                evaluations=evaluations,
-                top_n=max_urls,
-                min_score=3  # 最低分数阈值，低于此分数的结果将被过滤
-            )
-            
-            logger.info(f"筛选后保留了 {len(filtered_urls)} 个高价值URL")
-            
-            return filtered_urls
-            
-        except Exception as e:
-            logger.error(f"智能搜索筛选过程中发生错误: {str(e)}")
-            logger.warning("回退到普通搜索方法")
-            # 出错时回退到普通搜索
+            for method in methods_to_try:
+                try:
+                    logger.info(f"尝试使用 {method} 搜索")
+
+                    # 获取包含元数据的搜索结果
+                    search_results = self.search_engine.get_search_results_with_metadata(
+                        queries=search_queries,
+                        method=method
+                    )
+
+                    logger.info(f"使用 {method} 获取了 {len(search_results)} 个搜索结果(含元数据)")
+
+                    if not search_results:
+                        logger.warning(f"{method} 搜索没有返回任何结果，尝试下一个方法")
+                        continue
+
+                    # 限制发送给LLM评估的结果数量，避免输入过大导致API超时
+                    max_for_evaluation = min(10, len(search_results))
+                    results_to_evaluate = search_results[:max_for_evaluation]
+                    logger.info(f"从 {len(search_results)} 个结果中选取前 {max_for_evaluation} 个进行LLM评估")
+
+                    # 使用LLM评估搜索结果价值
+                    evaluations = self.llm_processor.evaluate_search_results(
+                        search_results=results_to_evaluate,
+                        risk_preference=risk_preference
+                    )
+
+                    # 筛选最有价值的URL
+                    filtered_urls = self.llm_processor.filter_search_results_by_value(
+                        search_results=search_results,
+                        evaluations=evaluations,
+                        top_n=max_urls,
+                        min_score=3  # 最低分数阈值，低于此分数的结果将被过滤
+                    )
+
+                    logger.info(f"使用 {method} 筛选后保留了 {len(filtered_urls)} 个高价值URL")
+
+                    if filtered_urls:
+                        return filtered_urls
+                    else:
+                        logger.warning(f"{method} 筛选后没有结果，尝试下一个方法")
+                        continue
+
+                except Exception as e:
+                    logger.error(f"使用 {method} 搜索时发生错误: {str(e)}")
+                    continue
+
+            # 所有方法都失败了，使用最后的普通搜索作为兜底
+            logger.warning("所有智能搜索方法都失败，回退到普通搜索方法")
             return self._search(search_queries, search_method, max_urls)
-            
+
         finally:
             # 恢复原始设置
             self.search_engine.max_results = original_max_results
@@ -371,7 +395,7 @@ class StockAgent:
             # 执行智能搜索
             urls = await self._smart_search_and_filter(
                 search_queries=search_queries,
-                search_method="google",  # 默认使用Google
+                search_method=self.config["SEARCH_ENGINE"]["DEFAULT_METHOD"],  # 使用配置的默认方法
                 max_urls=max_urls,
                 risk_preference=risk_preference
             )

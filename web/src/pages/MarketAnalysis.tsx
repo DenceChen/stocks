@@ -10,122 +10,88 @@ export default function MarketAnalysis() {
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [risk, setRisk] = useState('medium')
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const isMountedRef = useRef(true)
+  const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-    }
+    mountedRef.current = true
+    return () => { mountedRef.current = false; abortRef.current?.abort() }
   }, [])
 
   const handleAnalyze = async () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
-
-    setLoading(true)
-    setError(null)
-    setResult(null)
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+    setLoading(true); setError(null); setResult(null)
 
     try {
-      const response = await api.analyzeMarket(
-        { risk_preference: risk },
-        { signal: abortControllerRef.current.signal }
-      )
-      if (isMountedRef.current) {
-        if (response.success) {
-          setResult(response.data?.recommendation || '分析完成')
-        } else {
-          setError(response.error?.message || '分析失败')
-        }
+      const res = await api.analyzeMarket({ risk_preference: risk }, { signal: abortRef.current.signal })
+      if (mountedRef.current) {
+        res.success ? setResult(res.data?.recommendation || '分析完成') : setError(res.error?.message || '分析失败')
       }
     } catch (err: any) {
-      if (isMountedRef.current && err.name !== 'CanceledError') {
-        setError(err.message || '网络错误')
-      }
+      if (mountedRef.current && err.name !== 'CanceledError') setError(err.message || '网络错误')
     } finally {
-      if (isMountedRef.current) {
-        setLoading(false)
-      }
+      if (mountedRef.current) setLoading(false)
     }
   }
 
   return (
-    <div className="animate-slide-in">
-      <div style={{ marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px' }}>
-          市场分析
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-          AI 全局分析当前市场趋势和热点
-        </p>
+    <div className="anim-slide-up">
+      <div className="section-header">
+        <h2>市场分析</h2>
+        <p>AI 全局分析当前市场趋势和热点</p>
       </div>
 
-      <Card className="dashboard-card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div className="card card-glow" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-              风险偏好
-            </label>
+            <label style={{ display: 'block', marginBottom: 8, color: 'var(--text-muted)', fontSize: 12 }}>风险偏好</label>
             <Select value={risk} onChange={setRisk} style={{ width: 200 }}>
               <Option value="low">低风险偏好</Option>
               <Option value="medium">中风险偏好</Option>
               <Option value="high">高风险偏好</Option>
             </Select>
           </div>
-          <Button
-            type="primary"
-            size="large"
-            icon={<LineChartOutlined />}
-            loading={loading}
-            onClick={handleAnalyze}
-            style={{
-              background: 'var(--accent-green)',
-              borderColor: 'var(--accent-green)'
-            }}
-          >
+          <Button type="primary" size="large" icon={<LineChartOutlined />} loading={loading} onClick={handleAnalyze}>
             开始分析
           </Button>
         </div>
-      </Card>
+      </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
+        <div className="card" style={{ textAlign: 'center', padding: 60 }}>
           <Spin size="large" />
-          <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>
-            <ThunderboltOutlined spin style={{ color: 'var(--accent-green)' }} />
-            {' '}正在分析市场动态，请稍候...
+          <p style={{ marginTop: 16, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+            <ThunderboltOutlined style={{ color: 'var(--cyan)' }} spin /> 正在分析市场动态，请稍候...
+          </p>
+          <div style={{ marginTop: 8, width: 200, height: 3, margin: '8px auto 0', borderRadius: 2, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+            <div className="shimmer" style={{ height: '100%', width: '100%' }} />
+          </div>
+          <p style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
+            预计耗时 3-5 分钟
           </p>
         </div>
       )}
 
       {error && (
-        <Result
-          status="error"
-          title="分析失败"
-          subTitle={error}
-        />
+        <div className="card">
+          <Result status="error" title="分析失败" subTitle={error} />
+        </div>
       )}
 
       {result && !loading && (
-        <Card className="dashboard-card animate-slide-in">
-          <h3 style={{ marginBottom: '16px' }}>市场分析报告</h3>
+        <div className="card card-glow anim-slide-up">
+          <h3 style={{ marginBottom: 16, fontFamily: 'var(--font-body)', fontWeight: 600 }}>
+            📊 市场分析报告
+          </h3>
           <div style={{
-            padding: '20px',
-            background: 'var(--bg-tertiary)',
-            borderRadius: '8px',
-            lineHeight: 2,
-            whiteSpace: 'pre-wrap'
+            padding: 24, background: 'var(--bg-surface)', borderRadius: 8,
+            border: '1px solid var(--border-subtle)', lineHeight: 2, whiteSpace: 'pre-wrap',
+            fontFamily: 'var(--font-body)', fontSize: 14,
           }}>
             {result}
           </div>
-        </Card>
+        </div>
       )}
     </div>
   )

@@ -149,11 +149,11 @@ class SearchEngine:
     def get_search_results_with_metadata(self, queries: List[str], method: str = "google") -> List[Dict[str, str]]:
         """
         批量搜索并获取包含元数据的结果
-        
+
         Args:
             queries: 搜索关键词列表
-            method: 搜索方法，'google'或'baidu'
-            
+            method: 搜索方法，'google'、'baidu' 或 'minimax'
+
         Returns:
             包含url、title、abstract的字典列表
         """
@@ -161,20 +161,42 @@ class SearchEngine:
         for query in queries:
             if method.lower() == "google":
                 results = self.google_search_with_metadata(query)
-            else:
+            elif method.lower() == "baidu":
                 results = self.baidu_search(query)
-                
+            elif method.lower() == "minimax":
+                # 转换单个查询的结果格式
+                result = self.minimax_search(query)
+                results = []
+                if "results" in result:
+                    for item in result["results"]:
+                        results.append({
+                            'url': item.get('url', ''),
+                            'title': item.get('title', ''),
+                            'abstract': item.get('snippet', '')
+                        })
+            else:
+                logger.warning(f"不支持的搜索方法: {method}，回退到MiniMax搜索")
+                result = self.minimax_search(query)
+                results = []
+                if "results" in result:
+                    for item in result["results"]:
+                        results.append({
+                            'url': item.get('url', ''),
+                            'title': item.get('title', ''),
+                            'abstract': item.get('snippet', '')
+                        })
+
             all_results.extend(results)
             time.sleep(self.sleep_interval)  # 避免过快搜索被限制
-            
+
         # 去重 (基于URL)
         unique_results = []
         seen_urls = set()
         for result in all_results:
-            if result['url'] not in seen_urls:
+            if result.get('url') and result['url'] not in seen_urls:
                 seen_urls.add(result['url'])
                 unique_results.append(result)
-                
+
         return unique_results
             
     def get_urls_with_google(self, queries: List[str]) -> List[str]:
@@ -294,6 +316,42 @@ class SearchEngine:
                 seen_urls.add(item.get('url'))
                 unique_results.append(item)
 
+        return unique_results
+
+    def search_with_minimax_as_metadata(self, queries: List[str]) -> List[Dict[str, str]]:
+        """
+        使用MiniMax搜索并返回与get_search_results_with_metadata兼容的格式
+
+        Args:
+            queries: 搜索关键词列表
+
+        Returns:
+            包含url、title、abstract的字典列表，与get_search_results_with_metadata格式兼容
+        """
+        logger.info(f"使用MiniMax搜索(含元数据): {len(queries)} 个查询")
+
+        all_results = []
+        for query in queries:
+            result = self.minimax_search(query)
+            if "results" in result:
+                # 转换为兼容格式
+                for item in result["results"]:
+                    all_results.append({
+                        'url': item.get('url', ''),
+                        'title': item.get('title', ''),
+                        'abstract': item.get('snippet', '')  # snippet -> abstract
+                    })
+            time.sleep(self.sleep_interval)
+
+        # 去重基于URL
+        unique_results = []
+        seen_urls = set()
+        for item in all_results:
+            if item.get('url') and item.get('url') not in seen_urls:
+                seen_urls.add(item.get('url'))
+                unique_results.append(item)
+
+        logger.info(f"MiniMax搜索(含元数据)成功: 获取了 {len(unique_results)} 个结果")
         return unique_results
 
 if __name__ == "__main__":
