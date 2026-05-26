@@ -397,8 +397,8 @@ def register_routes(app: FastAPI):
                 ):
                     yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
             except Exception as e:
-                logger.error(f"流式股票分析失败: {e}")
-                yield f"event: error\ndata: {json_lib.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+                logger.error(f"流式股票分析失败: {e}", exc_info=True)
+                yield f"event: error\ndata: {json_lib.dumps({'message': '分析过程中发生错误，请稍后重试'}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -420,8 +420,8 @@ def register_routes(app: FastAPI):
                 ):
                     yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
             except Exception as e:
-                logger.error(f"流式市场分析失败: {e}")
-                yield f"event: error\ndata: {json_lib.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+                logger.error(f"流式市场分析失败: {e}", exc_info=True)
+                yield f"event: error\ndata: {json_lib.dumps({'message': '分析过程中发生错误，请稍后重试'}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 

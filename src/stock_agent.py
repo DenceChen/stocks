@@ -555,8 +555,6 @@ class StockAgent:
         """
         start_time = time.time()
         try:
-            yield {"type": "status", "data": {"stage": "searching", "message": f"正在搜索 {stock_name or stock_code} 的相关信息..."}}
-
             search_queries = []
             name = stock_name or ''
             if stock_name:
@@ -572,6 +570,8 @@ class StockAgent:
                     f"{stock_code} 最新研报"
                 ])
 
+            yield {"type": "status", "data": {"stage": "searching", "message": f"正在使用 MiniMax 搜索 {len(search_queries)} 个关键词...", "detail": f"关键词: {', '.join(search_queries)}"}}
+
             urls = await self._smart_search_and_filter(
                 search_queries=search_queries,
                 search_method=self.config["SEARCH_ENGINE"]["DEFAULT_METHOD"],
@@ -583,29 +583,35 @@ class StockAgent:
                 yield {"type": "error", "data": {"message": f"未找到关于股票 {stock_code} 的相关信息"}}
                 return
 
-            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在爬取 {len(urls)} 个网页..."}}
+            yield {"type": "status", "data": {"stage": "searching", "message": f"搜索完成，找到 {len(urls)} 个高价值网页", "detail": "\n".join([f"  {i+1}. {url}" for i, url in enumerate(urls)])}}
+
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在并发爬取 {len(urls)} 个网页...", "detail": f"最大并发数: {self.config['CRAWLER']['MAX_CONCURRENCY']}"}}
 
             documents = await self.crawler.crawl_urls(urls)
             if not documents:
                 yield {"type": "error", "data": {"message": f"爬取股票 {stock_code} 相关网页失败"}}
                 return
 
-            yield {"type": "status", "data": {"stage": "extracting", "message": f"正在提取 {len(documents)} 个文档的关键信息..."}}
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"成功爬取 {len(documents)}/{len(urls)} 个网页", "detail": "\n".join([f"  ✓ {doc.get('title', doc.get('url', ''))}" for doc in documents])}}
 
             extracted_docs = []
-            for doc in documents:
+            for i, doc in enumerate(documents):
+                title = doc.get('title', '未知')[:40]
+                yield {"type": "status", "data": {"stage": "extracting", "message": f"正在用 LLM 提取第 {i+1}/{len(documents)} 个文档的关键信息...", "detail": f"文档: {title}"}}
                 info = self.llm_processor.extract_info_from_document(doc)
                 extracted_docs.append(info)
+
+            yield {"type": "status", "data": {"stage": "extracting", "message": f"信息提取完成，共处理 {len(extracted_docs)} 个文档"}}
 
             # Fetch market data in parallel
             if self.data_provider:
                 try:
                     quote = await self.data_provider.get_quote(stock_code)
                     if quote:
-                        yield {"type": "quote", "data": quote}
+                        yield {"type": "quote", "data": quote if isinstance(quote, dict) else quote.__dict__}
                     financials = await self.data_provider.get_financials(stock_code)
                     if financials:
-                        yield {"type": "financials", "data": financials}
+                        yield {"type": "financials", "data": financials if isinstance(financials, dict) else financials.__dict__}
                 except Exception as e:
                     logger.warning(f"Failed to fetch market data: {e}")
 
@@ -655,7 +661,7 @@ class StockAgent:
         search_method = search_method or self.config["SEARCH_ENGINE"]["DEFAULT_METHOD"]
 
         try:
-            yield {"type": "status", "data": {"stage": "searching", "message": "正在搜索市场相关信息..."}}
+            yield {"type": "status", "data": {"stage": "searching", "message": f"正在使用 {search_method} 搜索 {len(search_queries)} 个关键词...", "detail": f"关键词: {', '.join(search_queries[:5])}{'...' if len(search_queries) > 5 else ''}"}}
 
             urls = await self._smart_search_and_filter(
                 search_queries=search_queries,
@@ -668,19 +674,25 @@ class StockAgent:
                 yield {"type": "error", "data": {"message": "无法获取相关信息，请检查搜索关键词或网络连接。"}}
                 return
 
-            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在爬取 {len(urls)} 个网页..."}}
+            yield {"type": "status", "data": {"stage": "searching", "message": f"搜索完成，找到 {len(urls)} 个高价值网页", "detail": "\n".join([f"  {i+1}. {url}" for i, url in enumerate(urls)])}}
+
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在并发爬取 {len(urls)} 个网页..."}}
 
             documents = await self.crawler.crawl_urls(urls)
             if not documents:
                 yield {"type": "error", "data": {"message": "爬取网页内容失败，请检查网络连接或URL有效性。"}}
                 return
 
-            yield {"type": "status", "data": {"stage": "extracting", "message": f"正在提取 {len(documents)} 个文档的关键信息..."}}
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"成功爬取 {len(documents)}/{len(urls)} 个网页"}}
 
             extracted_docs = []
-            for doc in documents:
+            for i, doc in enumerate(documents):
+                title = doc.get('title', '未知')[:40]
+                yield {"type": "status", "data": {"stage": "extracting", "message": f"正在用 LLM 提取第 {i+1}/{len(documents)} 个文档...", "detail": f"文档: {title}"}}
                 info = self.llm_processor.extract_info_from_document(doc)
                 extracted_docs.append(info)
+
+            yield {"type": "status", "data": {"stage": "extracting", "message": f"信息提取完成，共处理 {len(extracted_docs)} 个文档"}}
 
             yield {"type": "status", "data": {"stage": "generating", "message": "AI 正在生成市场分析报告..."}}
 

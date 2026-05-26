@@ -49,7 +49,7 @@ function App() {
           市场已休市
         </div>
       </Sider>
-      <Layout>
+      <Layout style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header className="header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{

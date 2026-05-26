@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Form, Input, Select, Button, Descriptions, Tag } from 'antd'
-import { SearchOutlined, SafetyCertificateOutlined, LoadingOutlined } from '@ant-design/icons'
+import { SearchOutlined, SafetyCertificateOutlined, LoadingOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from '../services/api'
 
 const { Option } = Select
@@ -19,17 +21,59 @@ const STAGE_MAP: Record<string, string> = {
   generating: 'AI 生成建议',
 }
 
+function parseThinkAndContent(text: string): { think: string | null; content: string } {
+  const thinkMatch = text.match(/<think\s*>([\s\S]*?)(<\/think>|$)/)
+  if (thinkMatch) {
+    const think = thinkMatch[1].trim()
+    const content = text.slice(thinkMatch[0].length).trim()
+    return { think: think || null, content }
+  }
+  return { think: null, content: text }
+}
+
+function ThinkBlock({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const preview = text.length > 150 ? text.slice(0, 150) + '...' : text
+
+  return (
+    <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--bg-surface)', fontSize: 12, color: 'var(--text-dim)',
+          fontFamily: 'var(--font-mono)', userSelect: 'none',
+        }}
+      >
+        {expanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
+        <span>AI 思考过程</span>
+        <span style={{ opacity: 0.5 }}>{expanded ? '(点击收起)' : `(${text.length} 字, 点击展开)`}</span>
+      </div>
+      {expanded && (
+        <div style={{
+          padding: 14, background: 'rgba(0,0,0,0.15)', fontSize: 12, lineHeight: 1.8,
+          color: 'var(--text-dim)', fontFamily: 'var(--font-body)', whiteSpace: 'pre-wrap',
+          maxHeight: 400, overflow: 'auto',
+        }}>
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StockAnalysis() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [streamingText, setStreamingText] = useState('')
   const [stage, setStage] = useState<string | null>(null)
+  const [stageDetail, setStageDetail] = useState<string | null>(null)
   const [form] = Form.useForm()
 
   const handleAnalyze = async (values: { stockCode: string; stockName?: string; risk: string }) => {
     setLoading(true); setError(null); setResult(null)
-    setStreamingText(''); setStage('searching')
+    setStreamingText(''); setStage('searching'); setStageDetail(null)
 
     try {
       await api.streamAnalyzeStock({
@@ -38,6 +82,7 @@ export default function StockAnalysis() {
         switch (event.type) {
           case 'status':
             setStage(event.data.stage)
+            setStageDetail(event.data.detail || null)
             break
           case 'quote':
             setResult(prev => prev ? { ...prev, quote: event.data } : {
@@ -57,29 +102,31 @@ export default function StockAnalysis() {
             setStreamingText(prev => prev + event.data.content)
             break
           case 'done':
-            setResult({
+            setResult(prev => ({
               stock_code: event.data.stock_code || values.stockCode,
               stock_name: event.data.stock_name || values.stockName || '',
               recommendation: event.data.recommendation,
-              quote: null, financials: null,
+              quote: prev?.quote ?? null,
+              financials: prev?.financials ?? null,
               processing_time: event.data.processing_time,
               sources: event.data.sources || []
-            })
-            setLoading(false); setStage(null)
+            }))
+            setLoading(false); setStage(null); setStageDetail(null)
             break
           case 'error':
             setError(event.data.message || '分析失败')
-            setLoading(false); setStage(null)
+            setLoading(false); setStage(null); setStageDetail(null)
             break
         }
       })
     } catch (err: any) {
       setError(err.message || '网络错误')
-      setLoading(false); setStage(null)
+      setLoading(false); setStage(null); setStageDetail(null)
     }
   }
 
   const displayText = streamingText || result?.recommendation || ''
+  const { think, content: mainContent } = parseThinkAndContent(displayText)
 
   return (
     <div className="anim-slide-up">
@@ -118,19 +165,32 @@ export default function StockAnalysis() {
         </div>
       )}
 
-      {loading && stage && !displayText && (
-        <div className="card card-glow" style={{ marginBottom: 24, textAlign: 'center', padding: 40 }}>
-          <LoadingOutlined style={{ fontSize: 32, color: 'var(--cyan)' }} spin />
-          <p style={{ marginTop: 16, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
-            {STAGE_MAP[stage] || stage}...
-          </p>
-          <div style={{ marginTop: 8, width: 200, height: 3, margin: '8px auto 0', borderRadius: 2, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+      {loading && stage && !mainContent && (
+        <div className="card card-glow" style={{ marginBottom: 24, padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <LoadingOutlined style={{ fontSize: 24, color: 'var(--cyan)' }} spin />
+            <div>
+              <div style={{ color: 'var(--text-bright)', fontFamily: 'var(--font-body)', fontWeight: 500 }}>
+                {stage && STAGE_MAP[stage]}...
+              </div>
+              {stageDetail && (
+                <pre style={{
+                  margin: '8px 0 0', fontSize: 11, color: 'var(--text-dim)',
+                  fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', lineHeight: 1.6,
+                  maxHeight: 120, overflow: 'auto',
+                }}>
+                  {stageDetail}
+                </pre>
+              )}
+            </div>
+          </div>
+          <div style={{ width: '100%', height: 3, borderRadius: 2, overflow: 'hidden', background: 'var(--bg-surface)' }}>
             <div className="shimmer" style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
       )}
 
-      {(displayText || (result && !loading)) && (
+      {(mainContent || (result && !loading)) && (
         <div className="anim-slide-up">
           <div style={{ display: 'grid', gridTemplateColumns: result?.quote ? '280px 1fr' : '1fr', gap: 16 }}>
             {result?.quote && (
@@ -176,11 +236,16 @@ export default function StockAnalysis() {
               </h3>
               <div className={loading ? 'streaming-cursor' : ''} style={{
                 padding: 20, background: 'var(--bg-surface)', borderRadius: 8,
-                border: '1px solid var(--border-subtle)', lineHeight: 1.9, whiteSpace: 'pre-wrap',
+                border: '1px solid var(--border-subtle)', lineHeight: 1.9,
                 fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-primary)',
-                minHeight: displayText ? 'auto' : 120,
+                minHeight: mainContent ? 'auto' : 120,
               }}>
-                {displayText || (loading ? '' : '等待分析...')}
+                {think && <ThinkBlock text={think} />}
+                {mainContent ? (
+                  <div className="markdown-body">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{mainContent}</ReactMarkdown>
+                  </div>
+                ) : (loading ? '' : '等待分析...')}
               </div>
               {result?.sources?.length > 0 && !loading && (
                 <div style={{ marginTop: 16 }}>

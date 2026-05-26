@@ -60,7 +60,7 @@ async function parseSSE(
       if (line.startsWith('event: ')) {
         currentEvent = line.slice(7).trim()
       } else if (line.startsWith('data: ')) {
-        currentData = line.slice(6)
+        currentData += (currentData ? '\n' : '') + line.slice(6)
       } else if (line === '' && currentEvent && currentData) {
         try {
           const parsed = JSON.parse(currentData)

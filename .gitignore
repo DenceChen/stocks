@@ -42,7 +42,18 @@ logs/
 # Project specific
 results/
 cache/
+data/
 *.profraw
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Playwright
+.playwright-mcp/
+
+# Claude
+.claude/
 
 # Mac OS
 .DS_Store
