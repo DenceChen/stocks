@@ -25,6 +25,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
 
+            # SSE 流式响应：直接返回，不做任何缓冲
+            content_type = response.headers.get("content-type", "")
+            if "text/event-stream" in content_type:
+                logger.info(f"← {request.method} {request.url.path} status={response.status_code} (streaming)")
+                return response
+
             # 计算处理时间
             duration = time.time() - start_time
 

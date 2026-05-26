@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import {
   DashboardOutlined,
@@ -73,15 +73,12 @@ function App() {
           </div>
         </Header>
         <Content className="content-area">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/stock" element={<StockAnalysis />} />
-            <Route path="/market" element={<MarketAnalysis />} />
-            <Route path="/batch" element={<BatchAnalysis />} />
-            <Route path="/quotes" element={<Quotes />} />
-            <Route path="/history" element={<History />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <div style={{ display: location.pathname === '/' ? 'block' : 'none' }}><Dashboard /></div>
+          <div style={{ display: location.pathname === '/stock' ? 'block' : 'none' }}><StockAnalysis /></div>
+          <div style={{ display: location.pathname === '/market' ? 'block' : 'none' }}><MarketAnalysis /></div>
+          <div style={{ display: location.pathname === '/batch' ? 'block' : 'none' }}><BatchAnalysis /></div>
+          <div style={{ display: location.pathname === '/quotes' ? 'block' : 'none' }}><Quotes /></div>
+          <div style={{ display: location.pathname === '/history' ? 'block' : 'none' }}><History /></div>
         </Content>
       </Layout>
     </Layout>

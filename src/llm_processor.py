@@ -4,7 +4,7 @@
 import logging
 import os
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Generator
 from openai import OpenAI
 
 # 使用直接导入而非相对导入
@@ -546,6 +546,134 @@ class LLMProcessor:
             logger.error(f"生成市场分析出错: {str(e)}")
             return f"生成市场分析时出错: {str(e)}"
             
+    def _stream_chat(self, messages: List[Dict], max_tokens: int = 8192, temperature: float = 0.7) -> Generator[str, None, None]:
+        """
+        Streaming chat completion - yields text chunks as they arrive.
+        """
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+
+    def generate_investment_advice_stream(self, extracted_docs: List[Dict], risk_preference: str = "low") -> Generator[str, None, None]:
+        """
+        Streaming version of generate_investment_advice.
+        Yields text chunks as the LLM generates them.
+        """
+        if not extracted_docs:
+            yield "没有足够的信息生成投资建议。"
+            return
+
+        logger.info(f"基于 {len(extracted_docs)} 个文档流式生成投资建议，风险偏好: {risk_preference}")
+
+        summary_text = ""
+        for i, doc in enumerate(extracted_docs, 1):
+            title = doc.get("title", "未知标题")
+            url = doc.get("url", "未知URL")
+            info = doc.get("extracted_info", "无有效信息")
+
+            if isinstance(info, dict):
+                info_text = ""
+                for key, value in info.items():
+                    info_text += f"- {key}: "
+                    if isinstance(value, list):
+                        info_text += "\n  " + "\n  ".join([f"- {item}" for item in value])
+                    else:
+                        info_text += str(value)
+                    info_text += "\n"
+            else:
+                info_text = str(info)
+
+            summary_text += f"文档{i}：【{title}】({url})\n{info_text}\n\n"
+
+        if len(summary_text) > 8000:
+            summary_text = summary_text[:8000] + "..."
+
+        risk_descriptions = {
+            "low": "我偏好低风险投资，更看重资金安全和稳定收益，希望投资组合波动性较小。请推荐更多价值型、防御型板块和蓝筹股，以及风险较低的投资策略。",
+            "medium": "我接受中等风险投资，希望在风险可控的前提下获得较好收益，能够承受一定的市场波动。请平衡推荐成长型和价值型投资标的，并提供均衡的投资策略。",
+            "high": "我偏好高风险高收益的投资，能够承受较大的市场波动，追求超额收益。请推荐更多高成长性板块和潜力股，以及进取型的投资策略。"
+        }
+
+        risk_description = risk_descriptions.get(risk_preference, risk_descriptions["medium"])
+        user_prompt = INVESTMENT_ADVICE_USER_PROMPT_TEMPLATE.format(summary_text=summary_text)
+        user_prompt += f"\n\n{risk_description}"
+
+        try:
+            yield from self._stream_chat(
+                messages=[
+                    {"role": "system", "content": INVESTMENT_ADVICE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            logger.info("流式投资建议生成完成")
+        except Exception as e:
+            logger.error(f"流式生成投资建议出错: {str(e)}")
+            yield f"\n\n[生成出错: {str(e)}]"
+
+    def generate_market_analysis_stream(self, extracted_docs: List[Dict], risk_preference: str = "low") -> Generator[str, None, None]:
+        """
+        Streaming version of generate_market_analysis.
+        Yields text chunks as the LLM generates them.
+        """
+        if not extracted_docs:
+            yield "没有足够的信息生成市场分析。"
+            return
+
+        logger.info(f"基于 {len(extracted_docs)} 个文档流式生成市场分析，风险偏好: {risk_preference}")
+
+        summary_text = ""
+        for i, doc in enumerate(extracted_docs, 1):
+            title = doc.get("title", "未知标题")
+            url = doc.get("url", "未知URL")
+            info = doc.get("extracted_info", "无有效信息")
+
+            if isinstance(info, dict):
+                info_text = ""
+                for key, value in info.items():
+                    info_text += f"- {key}: "
+                    if isinstance(value, list):
+                        info_text += "\n  " + "\n  ".join([f"- {item}" for item in value])
+                    else:
+                        info_text += str(value)
+                    info_text += "\n"
+            else:
+                info_text = str(info)
+
+            summary_text += f"文档{i}：【{title}】({url})\n{info_text}\n\n"
+
+        if len(summary_text) > 14000:
+            summary_text = summary_text[:14000] + "..."
+
+        risk_descriptions = {
+            "low": "我偏好低风险投资，更看重资金安全和稳定收益，希望投资组合波动性较小。请推荐更多价值型、防御型板块和蓝筹股，以及风险较低的投资策略。",
+            "medium": "我接受中等风险投资，希望在风险可控的前提下获得较好收益，能够承受一定的市场波动。请平衡推荐成长型和价值型投资标的，并提供均衡的投资策略。",
+            "high": "我偏好高风险高收益的投资，能够承受较大的市场波动，追求超额收益。请推荐更多高成长性板块和潜力股，以及进取型的投资策略。"
+        }
+
+        risk_description = risk_descriptions.get(risk_preference, risk_descriptions["medium"])
+        user_prompt = MARKET_ANALYSIS_USER_PROMPT_TEMPLATE.format(summary_text=summary_text)
+        user_prompt += f"\n\n{risk_description}"
+
+        try:
+            yield from self._stream_chat(
+                messages=[
+                    {"role": "system", "content": MARKET_ANALYSIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            logger.info("流式市场分析生成完成")
+        except Exception as e:
+            logger.error(f"流式生成市场分析出错: {str(e)}")
+            yield f"\n\n[生成出错: {str(e)}]"
+
     def save_advice_to_file(self, advice: str, data_dir: str = "../data") -> str:
         """
         保存投资建议到文件

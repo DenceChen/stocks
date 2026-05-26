@@ -1,37 +1,53 @@
-import { useState, useEffect, useRef } from 'react'
-import { Card, Button, Result, Spin, Select } from 'antd'
-import { LineChartOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Button, Select, Tag } from 'antd'
+import { LineChartOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
 
 const { Option } = Select
 
+const STAGE_MAP: Record<string, string> = {
+  searching: '搜索市场信息',
+  crawling: '爬取网页',
+  extracting: '提取关键信息',
+  generating: 'AI 生成分析报告',
+}
+
 export default function MarketAnalysis() {
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  const [streamingText, setStreamingText] = useState('')
+  const [stage, setStage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sources, setSources] = useState<string[]>([])
+  const [processingTime, setProcessingTime] = useState<number | null>(null)
   const [risk, setRisk] = useState('medium')
-  const abortRef = useRef<AbortController | null>(null)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false; abortRef.current?.abort() }
-  }, [])
 
   const handleAnalyze = async () => {
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
-    setLoading(true); setError(null); setResult(null)
+    setLoading(true); setError(null); setStreamingText('')
+    setStage('searching'); setSources([]); setProcessingTime(null)
 
     try {
-      const res = await api.analyzeMarket({ risk_preference: risk }, { signal: abortRef.current.signal })
-      if (mountedRef.current) {
-        res.success ? setResult(res.data?.recommendation || '分析完成') : setError(res.error?.message || '分析失败')
-      }
+      await api.streamAnalyzeMarket({ risk_preference: risk }, (event) => {
+        switch (event.type) {
+          case 'status':
+            setStage(event.data.stage)
+            break
+          case 'text':
+            setStreamingText(prev => prev + event.data.content)
+            break
+          case 'done':
+            setSources(event.data.sources || [])
+            setProcessingTime(event.data.processing_time)
+            setLoading(false); setStage(null)
+            break
+          case 'error':
+            setError(event.data.message || '分析失败')
+            setLoading(false); setStage(null)
+            break
+        }
+      })
     } catch (err: any) {
-      if (mountedRef.current && err.name !== 'CanceledError') setError(err.message || '网络错误')
-    } finally {
-      if (mountedRef.current) setLoading(false)
+      setError(err.message || '网络错误')
+      setLoading(false); setStage(null)
     }
   }
 
@@ -58,39 +74,66 @@ export default function MarketAnalysis() {
         </div>
       </div>
 
-      {loading && (
-        <div className="card" style={{ textAlign: 'center', padding: 60 }}>
-          <Spin size="large" />
+      {error && (
+        <div className="card" style={{ marginBottom: 24, padding: 20, color: 'var(--red)', fontFamily: 'var(--font-body)' }}>
+          <strong>分析失败：</strong>{error}
+        </div>
+      )}
+
+      {loading && stage && !streamingText && (
+        <div className="card card-glow" style={{ marginBottom: 24, textAlign: 'center', padding: 40 }}>
+          <LoadingOutlined style={{ fontSize: 32, color: 'var(--cyan)' }} spin />
           <p style={{ marginTop: 16, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
-            <ThunderboltOutlined style={{ color: 'var(--cyan)' }} spin /> 正在分析市场动态，请稍候...
+            <ThunderboltOutlined style={{ color: 'var(--cyan)' }} /> {STAGE_MAP[stage] || stage}...
           </p>
           <div style={{ marginTop: 8, width: 200, height: 3, margin: '8px auto 0', borderRadius: 2, overflow: 'hidden', background: 'var(--bg-surface)' }}>
             <div className="shimmer" style={{ height: '100%', width: '100%' }} />
           </div>
           <p style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
-            预计耗时 3-5 分钟
+            预计耗时 1-3 分钟
           </p>
         </div>
       )}
 
-      {error && (
-        <div className="card">
-          <Result status="error" title="分析失败" subTitle={error} />
-        </div>
-      )}
-
-      {result && !loading && (
+      {streamingText && (
         <div className="card card-glow anim-slide-up">
-          <h3 style={{ marginBottom: 16, fontFamily: 'var(--font-body)', fontWeight: 600 }}>
-            📊 市场分析报告
+          <h3 style={{ marginBottom: 16, fontFamily: 'var(--font-body)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            市场分析报告
+            {loading && <Tag color="processing" style={{ fontSize: 11 }}>生成中</Tag>}
           </h3>
-          <div style={{
+          <div className={loading ? 'streaming-cursor' : ''} style={{
             padding: 24, background: 'var(--bg-surface)', borderRadius: 8,
             border: '1px solid var(--border-subtle)', lineHeight: 2, whiteSpace: 'pre-wrap',
             fontFamily: 'var(--font-body)', fontSize: 14,
           }}>
-            {result}
+            {streamingText}
           </div>
+          {processingTime !== null && !loading && (
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
+                分析耗时: {processingTime.toFixed(2)}s
+              </span>
+              {sources.length > 0 && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
+                  参考来源: {sources.length} 个
+                </span>
+              )}
+            </div>
+          )}
+          {sources.length > 0 && !loading && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ maxHeight: 100, overflow: 'auto' }}>
+                {sources.map((s, i) => (
+                  <a key={i} href={s} target="_blank" rel="noopener noreferrer" style={{
+                    display: 'block', fontSize: 11, color: 'var(--blue)', fontFamily: 'var(--font-mono)',
+                    marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {i + 1}. {s}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

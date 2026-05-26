@@ -440,3 +440,16 @@ body {
   background: var(--cyan);
   box-shadow: 0 0 6px var(--cyan);
 }
+
+/* Streaming cursor animation */
+.streaming-cursor::after {
+  content: '▌';
+  animation: streamBlink 1s step-end infinite;
+  color: var(--cyan);
+  font-weight: 400;
+}
+
+@keyframes streamBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

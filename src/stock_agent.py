@@ -542,6 +542,176 @@ class StockAgent:
         logger.info(f"批量分析汇总报告已保存至: {summary_path}")
         return processed_results
 
+    async def analyze_stock_stream(self, stock_code: str, stock_name: Optional[str] = None,
+                                    max_urls: int = 5, risk_preference: str = "low"):
+        """
+        Streaming stock analysis. Yields SSE event dicts:
+        {"type": "status", "data": {...}}
+        {"type": "quote", "data": {...}}
+        {"type": "financials", "data": {...}}
+        {"type": "text", "data": {"content": "..."}}
+        {"type": "done", "data": {...}}
+        {"type": "error", "data": {"message": "..."}}
+        """
+        start_time = time.time()
+        try:
+            yield {"type": "status", "data": {"stage": "searching", "message": f"正在搜索 {stock_name or stock_code} 的相关信息..."}}
+
+            search_queries = []
+            name = stock_name or ''
+            if stock_name:
+                search_queries.extend([
+                    f"{stock_code} {stock_name} 财务报表",
+                    f"{stock_code} {stock_name} 行业分析",
+                    f"{stock_code} {stock_name} 最新研报"
+                ])
+            else:
+                search_queries.extend([
+                    f"{stock_code} 财务报表",
+                    f"{stock_code} 行业分析",
+                    f"{stock_code} 最新研报"
+                ])
+
+            urls = await self._smart_search_and_filter(
+                search_queries=search_queries,
+                search_method=self.config["SEARCH_ENGINE"]["DEFAULT_METHOD"],
+                max_urls=max_urls,
+                risk_preference=risk_preference
+            )
+
+            if not urls:
+                yield {"type": "error", "data": {"message": f"未找到关于股票 {stock_code} 的相关信息"}}
+                return
+
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在爬取 {len(urls)} 个网页..."}}
+
+            documents = await self.crawler.crawl_urls(urls)
+            if not documents:
+                yield {"type": "error", "data": {"message": f"爬取股票 {stock_code} 相关网页失败"}}
+                return
+
+            yield {"type": "status", "data": {"stage": "extracting", "message": f"正在提取 {len(documents)} 个文档的关键信息..."}}
+
+            extracted_docs = []
+            for doc in documents:
+                info = self.llm_processor.extract_info_from_document(doc)
+                extracted_docs.append(info)
+
+            # Fetch market data in parallel
+            if self.data_provider:
+                try:
+                    quote = await self.data_provider.get_quote(stock_code)
+                    if quote:
+                        yield {"type": "quote", "data": quote}
+                    financials = await self.data_provider.get_financials(stock_code)
+                    if financials:
+                        yield {"type": "financials", "data": financials}
+                except Exception as e:
+                    logger.warning(f"Failed to fetch market data: {e}")
+
+            yield {"type": "status", "data": {"stage": "generating", "message": "AI 正在生成投资建议..."}}
+
+            full_text = ""
+            for chunk in self.llm_processor.generate_investment_advice_stream(
+                extracted_docs, risk_preference=risk_preference
+            ):
+                full_text += chunk
+                yield {"type": "text", "data": {"content": chunk}}
+
+            processing_time = time.time() - start_time
+
+            # Save result
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"stock_analysis_{stock_code}_{timestamp}.txt"
+            filepath = os.path.join(self.output_dir, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(f"股票代码: {stock_code}\n股票名称: {stock_name or '未知'}\n")
+                f.write(f"风险偏好: {risk_preference}\n分析时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("\n" + "="*50 + "\n")
+                f.write(full_text)
+                f.write("\n" + "="*50 + "\n")
+                for i, url in enumerate(urls, 1):
+                    f.write(f"{i}. {url}\n")
+
+            yield {"type": "done", "data": {
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "recommendation": full_text,
+                "sources": urls,
+                "processing_time": processing_time,
+                "timestamp": timestamp
+            }}
+
+        except Exception as e:
+            logger.error(f"流式分析股票 {stock_code} 出错: {str(e)}")
+            yield {"type": "error", "data": {"message": str(e)}}
+
+    async def analyze_market_stream(self, search_queries: List[str], search_method: str = None,
+                                     max_urls: int = 5, risk_preference: str = "low"):
+        """
+        Streaming market analysis. Yields SSE event dicts.
+        """
+        start_time = time.time()
+        search_method = search_method or self.config["SEARCH_ENGINE"]["DEFAULT_METHOD"]
+
+        try:
+            yield {"type": "status", "data": {"stage": "searching", "message": "正在搜索市场相关信息..."}}
+
+            urls = await self._smart_search_and_filter(
+                search_queries=search_queries,
+                search_method=search_method,
+                max_urls=max_urls,
+                risk_preference=risk_preference
+            )
+
+            if not urls:
+                yield {"type": "error", "data": {"message": "无法获取相关信息，请检查搜索关键词或网络连接。"}}
+                return
+
+            yield {"type": "status", "data": {"stage": "crawling", "message": f"正在爬取 {len(urls)} 个网页..."}}
+
+            documents = await self.crawler.crawl_urls(urls)
+            if not documents:
+                yield {"type": "error", "data": {"message": "爬取网页内容失败，请检查网络连接或URL有效性。"}}
+                return
+
+            yield {"type": "status", "data": {"stage": "extracting", "message": f"正在提取 {len(documents)} 个文档的关键信息..."}}
+
+            extracted_docs = []
+            for doc in documents:
+                info = self.llm_processor.extract_info_from_document(doc)
+                extracted_docs.append(info)
+
+            yield {"type": "status", "data": {"stage": "generating", "message": "AI 正在生成市场分析报告..."}}
+
+            full_text = ""
+            for chunk in self.llm_processor.generate_market_analysis_stream(
+                extracted_docs, risk_preference=risk_preference
+            ):
+                full_text += chunk
+                yield {"type": "text", "data": {"content": chunk}}
+
+            processing_time = time.time() - start_time
+
+            # Save result
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"market_analysis_{timestamp}.txt"
+            filepath = os.path.join(self.output_dir, filename)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(full_text)
+
+            yield {"type": "done", "data": {
+                "recommendation": full_text,
+                "sources": urls,
+                "processing_time": processing_time,
+                "timestamp": timestamp,
+                "output_file": filepath
+            }}
+
+        except Exception as e:
+            logger.error(f"流式市场分析出错: {str(e)}")
+            yield {"type": "error", "data": {"message": str(e)}}
+
 async def main():
     """
     主函数，演示Agent的使用

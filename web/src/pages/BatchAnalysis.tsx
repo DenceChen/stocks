@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { Card, Input, Button, Progress, Table, Tag } from 'antd'
 import { AppstoreOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { api } from '../services/api'
@@ -16,17 +16,8 @@ export default function BatchAnalysis() {
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<BatchResult[]>([])
   const [status, setStatus] = useState<string | null>(null)
-  const mountedRef = useRef(true)
-  const abortRef = useRef<AbortController | null>(null)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false; abortRef.current?.abort() }
-  }, [])
 
   const handleBatchAnalyze = async () => {
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
     const stocks = stockInput.trim().split('\n').filter(l => l.trim()).map(l => {
       const parts = l.split(/[,\s]+/)
       return { code: parts[0], name: parts[1] || '' }
@@ -36,22 +27,19 @@ export default function BatchAnalysis() {
     setLoading(true); setProgress(0); setResults([]); setStatus('pending')
 
     try {
-      const res = await api.analyzeBatch({ stocks, risk_preference: 'medium' }, { signal: abortRef.current.signal })
-      if (mountedRef.current) {
-        if (res.success) { setStatus('processing'); pollTask(res.data.task_id) }
-        else { setStatus('error'); setLoading(false) }
-      }
+      const res = await api.analyzeBatch({ stocks, risk_preference: 'medium' })
+      if (res.success) { setStatus('processing'); pollTask(res.data.task_id) }
+      else { setStatus('error'); setLoading(false) }
     } catch (err: any) {
-      if (mountedRef.current && err.name !== 'CanceledError') { setStatus('error'); setLoading(false) }
+      setStatus('error'); setLoading(false)
     }
   }
 
   const pollTask = (taskId: string) => {
     const poll = async () => {
-      if (!mountedRef.current) return
       try {
         const res = await api.getTaskStatus(taskId)
-        if (mountedRef.current && res.success) {
+        if (res.success) {
           const d = res.data
           setStatus(d.status)
           if (d.status === 'completed') { setProgress(100); setResults(d.results || []); setLoading(false) }
@@ -59,7 +47,7 @@ export default function BatchAnalysis() {
           else if (d.status === 'error') setLoading(false)
           else setTimeout(poll, 2000)
         }
-      } catch { if (mountedRef.current) setLoading(false) }
+      } catch { setLoading(false) }
     }
     poll()
   }

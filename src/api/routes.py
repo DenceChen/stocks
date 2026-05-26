@@ -8,8 +8,9 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import json as json_lib
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 # 添加项目根目录到模块搜索路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -378,6 +379,51 @@ def register_routes(app: FastAPI):
                 success=False,
                 error={"code": "INTERNAL_ERROR", "message": str(e)}
             )
+
+    @app.post("/api/v1/analyze/stock/stream", tags=["股票分析"])
+    async def analyze_stock_stream(request: StockAnalysisRequest):
+        """单股分析 (SSE 流式输出)"""
+        from src.stock_agent import StockAgent
+
+        agent = StockAgent()
+
+        async def event_generator():
+            try:
+                async for event in agent.analyze_stock_stream(
+                    stock_code=request.stock_code,
+                    stock_name=request.stock_name,
+                    max_urls=request.max_urls,
+                    risk_preference=request.risk_preference
+                ):
+                    yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
+            except Exception as e:
+                logger.error(f"流式股票分析失败: {e}")
+                yield f"event: error\ndata: {json_lib.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    @app.post("/api/v1/analyze/market/stream", tags=["股票分析"])
+    async def analyze_market_stream(request: MarketAnalysisRequest):
+        """市场分析 (SSE 流式输出)"""
+        from src.stock_agent import StockAgent
+        from src.config import DEFAULT_SEARCH_QUERIES
+
+        agent = StockAgent()
+        search_queries = request.search_queries or DEFAULT_SEARCH_QUERIES
+
+        async def event_generator():
+            try:
+                async for event in agent.analyze_market_stream(
+                    search_queries=search_queries,
+                    max_urls=request.max_urls,
+                    risk_preference=request.risk_preference
+                ):
+                    yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
+            except Exception as e:
+                logger.error(f"流式市场分析失败: {e}")
+                yield f"event: error\ndata: {json_lib.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.post("/api/v1/analyze/batch", response_model=ApiResponse, tags=["股票分析"])
     async def analyze_batch(request: BatchAnalysisRequest):

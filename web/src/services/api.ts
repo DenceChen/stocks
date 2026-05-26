@@ -4,10 +4,8 @@ const BASE_URL = '/api/v1'
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 600000, // 10 分钟超时 - AI 分析需要搜索+爬取+LLM
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  timeout: 600000,
+  headers: { 'Content-Type': 'application/json' }
 })
 
 apiClient.interceptors.response.use(
@@ -22,46 +20,104 @@ apiClient.interceptors.response.use(
   }
 )
 
+export type SSEEvent = {
+  type: string
+  data: any
+}
+
+async function parseSSE(
+  url: string,
+  body: any,
+  onEvent: (event: SSEEvent) => void
+): Promise<void> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  }
+
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    let currentEvent = ''
+    let currentData = ''
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7).trim()
+      } else if (line.startsWith('data: ')) {
+        currentData = line.slice(6)
+      } else if (line === '' && currentEvent && currentData) {
+        try {
+          const parsed = JSON.parse(currentData)
+          onEvent({ type: currentEvent, data: parsed })
+        } catch {
+          onEvent({ type: currentEvent, data: currentData })
+        }
+        currentEvent = ''
+        currentData = ''
+      }
+    }
+  }
+
+  // Handle remaining buffer
+  if (buffer.trim()) {
+    const lines = buffer.split('\n')
+    let evt = '', dat = ''
+    for (const line of lines) {
+      if (line.startsWith('event: ')) evt = line.slice(7).trim()
+      else if (line.startsWith('data: ')) dat = line.slice(6)
+    }
+    if (evt && dat) {
+      try { onEvent({ type: evt, data: JSON.parse(dat) }) } catch { onEvent({ type: evt, data: dat }) }
+    }
+  }
+}
+
 export const api = {
-  // 健康检查
   healthCheck: () => apiClient.get('/health'),
-
-  // 股票行情
   getQuote: (code: string) => apiClient.get(`/quote/${code}`),
-
-  // 批量行情
   getRealtimeQuotes: (codes: string[]) =>
     apiClient.get('/quotes/realtime', { params: { codes: codes.join(',') } }),
-
-  // 财务数据
   getFinancials: (code: string) => apiClient.get(`/financials/${code}`),
-
-  // K线数据
   getKline: (code: string, period = 'daily', adjust = 'qfq') =>
     apiClient.get(`/kline/${code}`, { params: { period, adjust } }),
 
-  // 单股分析
   analyzeStock: (data: {
-    stock_code: string
-    stock_name?: string
-    risk_preference?: string
-    max_urls?: number
+    stock_code: string; stock_name?: string; risk_preference?: string; max_urls?: number
   }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/stock', data, options),
 
-  // 市场分析
   analyzeMarket: (data: {
-    search_queries?: string[]
-    risk_preference?: string
-    max_urls?: number
+    search_queries?: string[]; risk_preference?: string; max_urls?: number
   }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/market', data, options),
 
-  // 批量分析
   analyzeBatch: (data: {
-    stocks: Array<{ code: string; name?: string }>
-    risk_preference?: string
-    max_urls_per_stock?: number
+    stocks: Array<{ code: string; name?: string }>; risk_preference?: string; max_urls_per_stock?: number
   }, options?: { signal?: AbortSignal }) => apiClient.post('/analyze/batch', data, options),
 
-  // 任务状态
-  getTaskStatus: (taskId: string) => apiClient.get(`/tasks/${taskId}`)
+  getTaskStatus: (taskId: string) => apiClient.get(`/tasks/${taskId}`),
+
+  streamAnalyzeStock: (
+    data: { stock_code: string; stock_name?: string; risk_preference?: string; max_urls?: number },
+    onEvent: (event: SSEEvent) => void
+  ) => parseSSE(`${BASE_URL}/analyze/stock/stream`, data, onEvent),
+
+  streamAnalyzeMarket: (
+    data: { search_queries?: string[]; risk_preference?: string; max_urls?: number },
+    onEvent: (event: SSEEvent) => void
+  ) => parseSSE(`${BASE_URL}/analyze/market/stream`, data, onEvent),
 }
