@@ -4,6 +4,7 @@ import { LineChartOutlined, LoadingOutlined, DownOutlined, RightOutlined } from 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../services/api'
+import { addHistory } from '../services/history'
 
 const { Option } = Select
 
@@ -65,11 +66,12 @@ export default function MarketAnalysis() {
   const [risk, setRisk] = useState('medium')
 
   const handleAnalyze = async () => {
+    const currentRisk = risk
     setLoading(true); setError(null); setStreamingText('')
     setStage('searching'); setStageDetail(null); setSources([]); setProcessingTime(null)
 
     try {
-      await api.streamAnalyzeMarket({ risk_preference: risk }, (event) => {
+      await api.streamAnalyzeMarket({ risk_preference: currentRisk }, (event) => {
         switch (event.type) {
           case 'status':
             setStage(event.data.stage)
@@ -79,9 +81,22 @@ export default function MarketAnalysis() {
             setStreamingText(prev => prev + event.data.content)
             break
           case 'done':
-            setSources(event.data.sources || [])
-            setProcessingTime(event.data.processing_time)
+            const doneSources = event.data.sources || []
+            const doneTime = event.data.processing_time
+            setSources(doneSources)
+            setProcessingTime(doneTime)
             setLoading(false); setStage(null); setStageDetail(null)
+            addHistory({
+              stock_code: '-',
+              stock_name: '市场分析',
+              type: 'market',
+              risk_preference: currentRisk,
+              timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+              summary: streamingText.slice(0, 200) + '...',
+              full_content: streamingText,
+              processing_time: doneTime,
+              sources: doneSources,
+            })
             break
           case 'error':
             setError(event.data.message || '分析失败')
