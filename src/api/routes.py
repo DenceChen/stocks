@@ -5,11 +5,12 @@ import os
 import sys
 import asyncio
 import uuid
+import json
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import json as json_lib
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 # 添加项目根目录到模块搜索路径
@@ -33,7 +34,9 @@ from src.api.schemas import (
     TaskStatusResponse,
     HealthCheckResponse,
 )
-from src.api.middleware import setup_cors, RequestLoggingMiddleware
+from src.api.middleware import setup_cors, RequestLoggingMiddleware, get_current_user, JWT_SECRET, JWT_ALGORITHM
+from src.api.auth import router as auth_router
+from src.db.database import init_db, save_analysis, get_db
 from src.logging_config import get_api_logger
 
 logger = get_api_logger()
@@ -58,6 +61,16 @@ def create_app() -> FastAPI:
 
     # 注册路由
     register_routes(app)
+
+    # 注册认证路由
+    app.include_router(auth_router)
+
+    # 添加启动事件
+    @app.on_event("startup")
+    async def startup_event():
+        """应用启动时初始化数据库"""
+        await init_db()
+        logger.info("应用启动完成")
 
     return app
 
@@ -381,13 +394,26 @@ def register_routes(app: FastAPI):
             )
 
     @app.post("/api/v1/analyze/stock/stream", tags=["股票分析"])
-    async def analyze_stock_stream(request: StockAnalysisRequest):
+    async def analyze_stock_stream(request: StockAnalysisRequest, req: Request):
         """单股分析 (SSE 流式输出)"""
         from src.stock_agent import StockAgent
+        import jwt
+
+        # 从 query param 获取 token（SSE 端点特殊处理）
+        token = req.query_params.get("token")
+        user_id = None
+        if token:
+            try:
+                payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                user_id = payload.get("user_id")
+            except Exception:
+                pass  # token 无效，不保存历史记录
 
         agent = StockAgent()
+        full_result = {"recommendation": "", "sources": [], "processing_time": 0}
 
         async def event_generator():
+            nonlocal full_result
             try:
                 async for event in agent.analyze_stock_stream(
                     stock_code=request.stock_code,
@@ -395,6 +421,35 @@ def register_routes(app: FastAPI):
                     max_urls=request.max_urls,
                     risk_preference=request.risk_preference
                 ):
+                    # 收集结果用于保存历史记录
+                    if event["type"] == "text":
+                        full_result["recommendation"] += event["data"].get("content", "")
+                    elif event["type"] == "done":
+                        full_result["sources"] = event["data"].get("sources", [])
+                        full_result["processing_time"] = event["data"].get("processing_time", 0)
+                        full_result["stock_code"] = event["data"].get("stock_code", request.stock_code)
+                        full_result["stock_name"] = event["data"].get("stock_name", request.stock_name)
+
+                        # 如果用户已认证，保存历史记录
+                        if user_id:
+                            try:
+                                # 生成摘要（取前 200 字）
+                                summary = full_result["recommendation"][:200] + "..." if len(full_result["recommendation"]) > 200 else full_result["recommendation"]
+                                await save_analysis(
+                                    user_id=user_id,
+                                    analysis_type="stock",
+                                    stock_code=full_result.get("stock_code", ""),
+                                    stock_name=full_result.get("stock_name", ""),
+                                    risk_preference=request.risk_preference,
+                                    summary=summary,
+                                    full_content=full_result["recommendation"],
+                                    processing_time=full_result.get("processing_time"),
+                                    sources=full_result.get("sources", [])
+                                )
+                                logger.info(f"已保存股票分析历史记录: user_id={user_id}, stock={request.stock_code}")
+                            except Exception as e:
+                                logger.error(f"保存历史记录失败: {e}")
+
                     yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
             except Exception as e:
                 logger.error(f"流式股票分析失败: {e}", exc_info=True)
@@ -403,21 +458,60 @@ def register_routes(app: FastAPI):
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.post("/api/v1/analyze/market/stream", tags=["股票分析"])
-    async def analyze_market_stream(request: MarketAnalysisRequest):
+    async def analyze_market_stream(request: MarketAnalysisRequest, req: Request):
         """市场分析 (SSE 流式输出)"""
         from src.stock_agent import StockAgent
         from src.config import DEFAULT_SEARCH_QUERIES
+        import jwt
+
+        # 从 query param 获取 token（SSE 端点特殊处理）
+        token = req.query_params.get("token")
+        user_id = None
+        if token:
+            try:
+                payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                user_id = payload.get("user_id")
+            except Exception:
+                pass
 
         agent = StockAgent()
         search_queries = request.search_queries or DEFAULT_SEARCH_QUERIES
+        full_result = {"recommendation": "", "sources": [], "processing_time": 0}
 
         async def event_generator():
+            nonlocal full_result
             try:
                 async for event in agent.analyze_market_stream(
                     search_queries=search_queries,
                     max_urls=request.max_urls,
                     risk_preference=request.risk_preference
                 ):
+                    # 收集结果用于保存历史记录
+                    if event["type"] == "text":
+                        full_result["recommendation"] += event["data"].get("content", "")
+                    elif event["type"] == "done":
+                        full_result["sources"] = event["data"].get("sources", [])
+                        full_result["processing_time"] = event["data"].get("processing_time", 0)
+
+                        # 如果用户已认证，保存历史记录
+                        if user_id:
+                            try:
+                                summary = full_result["recommendation"][:200] + "..." if len(full_result["recommendation"]) > 200 else full_result["recommendation"]
+                                await save_analysis(
+                                    user_id=user_id,
+                                    analysis_type="market",
+                                    stock_code="",
+                                    stock_name="",
+                                    risk_preference=request.risk_preference,
+                                    summary=summary,
+                                    full_content=full_result["recommendation"],
+                                    processing_time=full_result.get("processing_time"),
+                                    sources=full_result.get("sources", [])
+                                )
+                                logger.info(f"已保存市场分析历史记录: user_id={user_id}")
+                            except Exception as e:
+                                logger.error(f"保存历史记录失败: {e}")
+
                     yield f"event: {event['type']}\ndata: {json_lib.dumps(event['data'], ensure_ascii=False)}\n\n"
             except Exception as e:
                 logger.error(f"流式市场分析失败: {e}", exc_info=True)
@@ -488,6 +582,163 @@ def register_routes(app: FastAPI):
                 error=task.get("error")
             ).model_dump()
         )
+
+    # ============ 历史记录 API ============
+
+    @app.get("/api/v1/history", response_model=ApiResponse, tags=["历史记录"])
+    async def get_history_list(
+        page: int = Query(1, ge=1, description="页码"),
+        page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+        type: Optional[str] = Query(None, description="筛选类型: stock/market/batch"),
+        starred_only: bool = Query(False, description="只显示收藏的记录"),
+        user_id: int = Depends(get_current_user)
+    ):
+        """获取当前用户的分析历史记录"""
+        try:
+            async with get_db() as db:
+                conditions = ["user_id = ?"]
+                params: list = [user_id]
+
+                if type:
+                    conditions.append("type = ?")
+                    params.append(type)
+
+                if starred_only:
+                    conditions.append("starred = 1")
+
+                where_clause = " AND ".join(conditions)
+
+                count_query = f"SELECT COUNT(*) FROM analysis_history WHERE {where_clause}"
+                cursor = await db.execute(count_query, params)
+                total_count = (await cursor.fetchone())[0]
+
+                offset = (page - 1) * page_size
+                query = f"""
+                    SELECT id, type, stock_code, stock_name, risk_preference,
+                           summary, processing_time, sources, starred, created_at
+                    FROM analysis_history
+                    WHERE {where_clause}
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                params.extend([page_size, offset])
+
+                cursor = await db.execute(query, params)
+                rows = await cursor.fetchall()
+
+                items = []
+                for row in rows:
+                    items.append({
+                        "id": row[0],
+                        "type": row[1],
+                        "stock_code": row[2],
+                        "stock_name": row[3],
+                        "risk_preference": row[4],
+                        "summary": row[5],
+                        "processing_time": row[6],
+                        "sources": json.loads(row[7]) if row[7] else [],
+                        "starred": bool(row[8]),
+                        "created_at": row[9]
+                    })
+
+                return ApiResponse(
+                    success=True,
+                    data={
+                        "items": items,
+                        "total_count": total_count,
+                        "page": page,
+                        "page_size": page_size,
+                        "total_pages": (total_count + page_size - 1) // page_size
+                    }
+                )
+
+        except Exception as e:
+            logger.error(f"获取历史记录失败: {e}")
+            return ApiResponse(
+                success=False,
+                error={"code": "INTERNAL_ERROR", "message": str(e)}
+            )
+
+    @app.get("/api/v1/history/{history_id}", response_model=ApiResponse, tags=["历史记录"])
+    async def get_history_detail(
+        history_id: int,
+        user_id: int = Depends(get_current_user)
+    ):
+        """获取单条历史记录详情"""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute("""
+                    SELECT id, type, stock_code, stock_name, risk_preference,
+                           summary, full_content, processing_time, sources, starred, created_at
+                    FROM analysis_history
+                    WHERE id = ? AND user_id = ?
+                """, (history_id, user_id))
+                row = await cursor.fetchone()
+
+                if not row:
+                    return ApiResponse(success=False, error={"code": "NOT_FOUND", "message": "记录不存在"})
+
+                return ApiResponse(success=True, data={
+                    "id": row[0], "type": row[1], "stock_code": row[2], "stock_name": row[3],
+                    "risk_preference": row[4], "summary": row[5], "full_content": row[6],
+                    "processing_time": row[7], "sources": json.loads(row[8]) if row[8] else [],
+                    "starred": bool(row[9]), "created_at": row[10]
+                })
+
+        except Exception as e:
+            logger.error(f"获取历史记录详情失败: {e}")
+            return ApiResponse(success=False, error={"code": "INTERNAL_ERROR", "message": str(e)})
+
+    @app.put("/api/v1/history/{history_id}/star", response_model=ApiResponse, tags=["历史记录"])
+    async def toggle_history_star(
+        history_id: int,
+        user_id: int = Depends(get_current_user)
+    ):
+        """收藏/取消收藏"""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT starred FROM analysis_history WHERE id = ? AND user_id = ?",
+                    (history_id, user_id)
+                )
+                row = await cursor.fetchone()
+                if not row:
+                    return ApiResponse(success=False, error={"code": "NOT_FOUND", "message": "记录不存在"})
+
+                new_starred = 0 if row[0] else 1
+                await db.execute("UPDATE analysis_history SET starred = ? WHERE id = ?", (new_starred, history_id))
+                await db.commit()
+
+                return ApiResponse(success=True, data={"starred": bool(new_starred)})
+
+        except Exception as e:
+            logger.error(f"更新收藏状态失败: {e}")
+            return ApiResponse(success=False, error={"code": "INTERNAL_ERROR", "message": str(e)})
+
+    @app.delete("/api/v1/history/{history_id}", response_model=ApiResponse, tags=["历史记录"])
+    async def delete_history_item(
+        history_id: int,
+        user_id: int = Depends(get_current_user)
+    ):
+        """删除历史记录"""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT id FROM analysis_history WHERE id = ? AND user_id = ?",
+                    (history_id, user_id)
+                )
+                row = await cursor.fetchone()
+                if not row:
+                    return ApiResponse(success=False, error={"code": "NOT_FOUND", "message": "记录不存在"})
+
+                await db.execute("DELETE FROM analysis_history WHERE id = ?", (history_id,))
+                await db.commit()
+
+                return ApiResponse(success=True, data={"deleted": history_id})
+
+        except Exception as e:
+            logger.error(f"删除历史记录失败: {e}")
+            return ApiResponse(success=False, error={"code": "INTERNAL_ERROR", "message": str(e)})
 
 
 async def run_batch_analysis(task_id: str, stocks: List[tuple], request: BatchAnalysisRequest):

@@ -4,7 +4,6 @@ import { SearchOutlined, SafetyCertificateOutlined, LoadingOutlined, DownOutline
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../services/api'
-import { addHistory } from '../services/history'
 
 const { Option } = Select
 
@@ -117,17 +116,6 @@ export default function StockAnalysis() {
               quote: prev?.quote ?? null,
               financials: prev?.financials ?? null,
             }))
-            addHistory({
-              stock_code: doneResult.stock_code,
-              stock_name: doneResult.stock_name || values.stockName || '',
-              type: 'stock',
-              risk_preference: values.risk,
-              timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
-              summary: doneResult.recommendation?.slice(0, 200) + '...',
-              full_content: doneResult.recommendation,
-              processing_time: doneResult.processing_time,
-              sources: doneResult.sources,
-            })
             setLoading(false); setStage(null); setStageDetail(null)
             break
           case 'error':

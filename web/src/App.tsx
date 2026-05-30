@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Layout, Menu } from 'antd'
+import { Layout, Menu, Button, Dropdown, Spin } from 'antd'
 import {
   DashboardOutlined,
   SearchOutlined,
@@ -7,7 +7,11 @@ import {
   AppstoreOutlined,
   HistoryOutlined,
   TableOutlined,
+  UserOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import StockAnalysis from './pages/StockAnalysis'
 import MarketAnalysis from './pages/MarketAnalysis'
@@ -27,9 +31,28 @@ const menuItems = [
   { key: '/history', icon: <HistoryOutlined />, label: '分析历史' },
 ]
 
-function App() {
+function AppInner() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user, loading, logout } = useAuth()
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-abyss)',
+      }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Login />
+  }
 
   return (
     <Layout className="app-layout">
@@ -62,14 +85,33 @@ function App() {
             </span>
             <span className="pulse-dot" />
           </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-dim)',
-          }}>
-            {new Date().toLocaleDateString('zh-CN', {
-              year: 'numeric', month: '2-digit', day: '2-digit'
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'logout',
+                    icon: <LogoutOutlined />,
+                    label: '退出登录',
+                    onClick: () => { logout(); navigate('/') },
+                  },
+                ],
+              }}
+            >
+              <Button type="text" size="small" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                <UserOutlined style={{ marginRight: 6 }} />
+                {user.username}
+              </Button>
+            </Dropdown>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-dim)',
+            }}>
+              {new Date().toLocaleDateString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit'
+              })}
+            </span>
           </div>
         </Header>
         <Content className="content-area">
@@ -82,6 +124,14 @@ function App() {
         </Content>
       </Layout>
     </Layout>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   )
 }
 

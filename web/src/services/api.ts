@@ -1,11 +1,20 @@
 import axios from 'axios'
+import { getToken } from './auth'
 
 const BASE_URL = '/api/v1'
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
   timeout: 600000,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+})
+
+apiClient.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 apiClient.interceptors.response.use(
@@ -30,9 +39,18 @@ async function parseSSE(
   body: any,
   onEvent: (event: SSEEvent) => void
 ): Promise<void> {
-  const response = await fetch(url, {
+  const token = getToken()
+  const separator = url.includes('?') ? '&' : '?'
+  const fullUrl = token ? `${url}${separator}token=${encodeURIComponent(token)}` : url
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await fetch(fullUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
 
@@ -120,4 +138,11 @@ export const api = {
     data: { search_queries?: string[]; risk_preference?: string; max_urls?: number },
     onEvent: (event: SSEEvent) => void
   ) => parseSSE(`${BASE_URL}/analyze/market/stream`, data, onEvent),
+
+  // History API
+  getHistory: (params?: { page?: number; page_size?: number; type?: string; starred_only?: boolean }) =>
+    apiClient.get('/history', { params }),
+  getHistoryDetail: (id: number) => apiClient.get(`/history/${id}`),
+  toggleStar: (id: number) => apiClient.put(`/history/${id}/star`),
+  deleteHistory: (id: number) => apiClient.delete(`/history/${id}`),
 }

@@ -1,221 +1,269 @@
-# 股票投资Agent
+# Stocks Investment Analysis System
 
-一个自动化的股票投资分析工具，能够自动搜索、爬取和分析股票相关信息，并生成专业的投资建议。
+一个基于 AI 的智能股票投资分析平台，整合实时行情数据、搜索引擎和大型语言模型，提供专业的投资建议和市场分析。
 
-## 项目特点
+## 功能特性
 
-- **自动化搜索**：利用 Google、百度和 MiniMax 搜索引擎获取最新的股票相关信息
-- **智能爬虫**：使用 trafilatura 高效爬取网页内容，自动提取关键信息
-- **专业分析**：利用 MiniMax 大型语言模型分析海量信息，生成专业的投资分析
-- **综合建议**：提供全面、具体、可操作的投资建议，包括买入价格、止损点等
-- **批量处理**：支持单只股票深度分析和多只股票批量分析
-- **风险偏好**：支持低、中、高三种风险偏好，提供个性化投资建议
-- **详细日志**：提供彩色日志输出，方便跟踪和调试
+- **实时行情数据** - 通过 AKShare 获取 A 股实时行情、财务数据和 K 线图表
+- **AI 驱动分析** - 基于 MiniMax 大型语言模型的智能股票与市场分析
+- **多源搜索** - 支持 Google、百度和 MiniMax 搜索引擎获取最新资讯
+- **批量处理** - 支持单只股票深度分析、批量分析和整体市场分析
+- **风险偏好定制** - 低、中、高三种风险偏好设置，生成个性化投资建议
+- **流式响应** - SSE 流式输出，实时展示分析进度
+- **Web 界面** - 基于 React + Ant Design 的现代化前端界面
+- **RESTful API** - FastAPI 后端，提供完整的 API 服务
 
-## 安装说明
+## 系统架构
 
-### 1. 克隆仓库
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           前端 (React)                              │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐       │
+│  │ Dashboard │  │  Quotes   │  │  Analysis │  │  Batch    │       │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘       │
+│        └──────────────┴──────────────┴──────────────┘               │
+│                          ┌─────────────────────┐                    │
+│                          │   API Client        │                    │
+│                          └──────────┬──────────┘                    │
+└─────────────────────────────────────┼───────────────────────────────┘
+                                       │ HTTPS/JSON
+                                       │
+┌─────────────────────────────────────┼───────────────────────────────┐
+│                             后端 (FastAPI)                         │
+│                              ┌─────────────┐                        │
+│                              │   CORS +    │                        │
+│                              │  Middleware │                        │
+│                              └──────┬──────┘                        │
+│     ┌──────────────────────────────┼────────────────────────────┐  │
+│     │                              │                            │  │
+│  ┌──┴───┐  ┌───────────┐  ┌───────┴───────┐  ┌─────────────┐  │  │
+│  │行情数据│  │股票分析  │  │  批量分析    │  │  任务管理   │  │  │
+│  │ API   │  │  API     │  │     API      │  │    API      │  │  │
+│  └───┬───┘  └────┬─────┘  └───────┬───────┘  └──────┬──────┘  │  │
+│      │           │                │                 │         │  │
+└──────┼───────────┼────────────────┼─────────────────┼─────────┼──┘
+       │           │                │                 │         │
+┌──────┼───────────┼────────────────┼─────────────────┼─────────┼──┐
+│  ┌───▼───┐  ┌────▼─────┐  ┌───────▼───────┐  ┌─────▼─────┐   │  │
+│  │AKShare│  │StockAgent│  │LLMProcessor  │  │DataProvider│   │  │
+│  └───────┘  └──────────┘  └───────┬───────┘  └───────────┘   │  │
+│                                    │                            │  │
+│                          ┌───────────┴───────────┐              │  │
+│                          │  Search Engine       │              │  │
+│                          │ (Google/Baidu/MiniMax)│              │  │
+│                          └───────────┬───────────┘              │  │
+│                                      │                          │  │
+└──────────────────────────────────────┼──────────────────────────┼──┘
+                                       │                          │
+                              ┌────────▼────────┐        ┌────────▼────────┐
+                              │  MiniMax API    │        │   AKShare API   │
+                              │  (LLM + Search) │        │  (股票数据源)    │
+                              └─────────────────┘        └─────────────────┘
+```
+
+## 快速开始
+
+### 环境要求
+
+- Python 3.10+
+- Node.js 18+
+- MiniMax API Key
+
+### 安装步骤
+
+#### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/DenceChen/stocks.git
+git clone https://github.com/your-org/stocks.git
 cd stocks
 ```
 
-### 2. 创建虚拟环境
-
-#### 使用venv创建（Python内置）
+#### 2. 后端安装
 
 ```bash
+# 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # 在Windows上使用: venv\Scripts\activate
-```
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-#### 使用Conda创建
-
-```bash
-# 创建名为stock-env的新环境，指定Python版本为3.8
-conda create -n stock-env python=3.8
-
-# 激活环境
-conda activate stock-env
-
-# 如果需要退出环境
-# conda deactivate
-```
-
-### 3. 安装依赖
-
-```bash
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-### 4. 配置环境变量
+#### 3. 前端安装
 
-创建一个`.env`文件，添加以下内容：
-
+```bash
+cd web
+npm install
 ```
+
+#### 4. 配置环境变量
+
+复制 `.env.example` 到 `.env` 并修改配置：
+
+```bash
+cp .env.example .env
+```
+
+`.env` 文件内容：
+
+```env
+# MiniMax LLM 配置
 LLM_API_KEY=your_api_key_here
 LLM_BASE_URL=https://api.minimaxi.com/v1
 LLM_MODEL=MiniMax-M2.7-highspeed
 ```
 
-或直接复制 `.env.example` 并修改其中的配置。
+#### 5. 启动服务
 
-## 使用方法
-
-### 单只股票分析
+**启动后端：**
 
 ```bash
-python -m stocks.src.main -s AAPL -n "Apple Inc."
+# 方式一：直接运行
+python run_api.py
+
+# 方式二：使用 uvicorn
+uvicorn src.api.routes:create_app --reload --host 0.0.0.0 --port 8000
 ```
 
-选项说明：
-- `-s, --stock`: 股票代码
-- `-n, --name`: 股票名称（可选）
-- `-u, --urls`: 最大处理URL数量（默认为15）
-- `-r, --risk`: 投资风险偏好 (low/medium/high, 默认为low)
-- `-v, --verbose`: 启用详细日志
-- `-o, --output`: 指定输出目录
-
-### 批量分析多只股票
+**启动前端：**
 
 ```bash
-python -m stocks.src.main -b stocks.txt
+cd web
+npm run dev
 ```
 
-`stocks.txt`格式为每行一只股票，例如：
-```
-AAPL,Apple Inc.
-MSFT,Microsoft Corporation
-GOOGL,Alphabet Inc.
-```
+访问 http://localhost:5173
 
-### 市场整体分析
-
-```bash
-python -m stocks.src.main -m
-```
-
-### 快速启动（交互式）
-
-```bash
-python run.py
-```
-
-## 项目结构
+## 项目目录结构
 
 ```
 stocks/
-├── data/              # 数据存储目录
-├── results/           # 分析结果存储目录
-├── logs/              # 日志文件目录
-├── src/               # 源代码
-│   ├── __init__.py
-│   ├── search_engine.py  # 搜索引擎模块 (Google/Baidu/MiniMax)
-│   ├── crawler.py     # 网页爬虫模块
-│   ├── llm_processor.py  # LLM处理模块
-│   ├── stock_agent.py # 主Agent模块
-│   ├── config.py      # 配置模块
-│   ├── logging_config.py # 日志配置模块
-│   ├── prompts.py     # 提示词模板
-│   ├── utils.py       # 工具函数
-│   └── main.py        # 主程序入口
-├── tests/             # 测试用例目录
-├── docs/              # 文档目录
-├── .env               # 环境变量（不包含在版本控制中）
-├── .env.example       # 环境变量示例
-├── requirements.txt   # 依赖列表
-└── README.md          # 项目说明
+├── data/                    # 数据存储目录
+├── docs/                    # 文档目录
+│   ├── architecture.md      # 系统架构文档
+│   ├── deployment.md       # 部署文档
+│   └── ...
+├── examples/                # 示例代码
+├── logs/                    # 日志文件
+├── results/                 # 分析结果
+├── src/                     # 后端源代码
+│   ├── api/                 # API 模块
+│   │   ├── middleware.py    # 中间件（CORS、日志）
+│   │   ├── routes.py        # 路由定义
+│   │   └── schemas.py       # Pydantic 模型
+│   ├── config.py            # 配置文件
+│   ├── crawler.py           # 网页爬虫
+│   ├── data_provider.py    # AKShare 数据封装
+│   ├── llm_processor.py    # LLM 处理器
+│   ├── logging_config.py    # 日志配置
+│   ├── main.py              # CLI 入口
+│   ├── prompts.py           # 提示词模板
+│   ├── search_engine.py    # 搜索引擎
+│   ├── stock_agent.py      # 核心分析 Agent
+│   └── utils.py             # 工具函数
+├── tests/                   # 测试用例
+├── web/                     # 前端源代码
+│   ├── src/
+│   │   ├── pages/           # 页面组件
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── Quotes.tsx
+│   │   │   └── BatchAnalysis.tsx
+│   │   ├── services/        # API 服务
+│   │   │   └── api.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.ts
+├── .env.example             # 环境变量示例
+├── .gitignore
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── Dockerfile
+├── LICENSE
+├── main.py
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+├── run.py
+├── run_api.py
+└── setup.py
 ```
 
-## 配置详解
+## API 接口概览
 
-可以通过修改`src/config.py`文件来自定义程序行为，主要包括：
+| 模块 | 方法 | 路径 | 描述 |
+|------|------|------|------|
+| 健康检查 | GET | /api/v1/health | 服务健康状态 |
+| 行情数据 | GET | /api/v1/quote/{stock_code} | 单只股票实时行情 |
+| 行情数据 | GET | /api/v1/quotes/realtime | 批量实时行情 |
+| 行情数据 | GET | /api/v1/financials/{stock_code} | 财务数据 |
+| 行情数据 | GET | /api/v1/kline/{stock_code} | K 线数据 |
+| 股票分析 | POST | /api/v1/analyze/stock | 单股分析 |
+| 股票分析 | POST | /api/v1/analyze/stock/stream | 单股分析（流式） |
+| 股票分析 | POST | /api/v1/analyze/market | 市场分析 |
+| 股票分析 | POST | /api/v1/analyze/market/stream | 市场分析（流式） |
+| 股票分析 | POST | /api/v1/analyze/batch | 批量分析 |
+| 任务管理 | GET | /api/v1/tasks/{task_id} | 获取任务状态 |
 
-- **搜索引擎配置**：搜索引擎选择、结果数量、搜索模板等
-- **爬虫配置**：并发数、超时时间、重试策略等
-- **LLM配置**：模型选择、温度参数、最大token等
-- **日志配置**：日志级别、输出格式、保存路径等
-- **Agent配置**：结果保存路径、缓存策略等
+完整 API 文档请访问：http://localhost:8000/docs
 
-## 高级使用
+## 技术栈
 
-### 自定义搜索模板
+### 后端
 
-可以在`config.py`中的`SEARCH_CONFIG`部分修改搜索模板，以满足不同需求：
+- **FastAPI** - 高性能 Web 框架
+- **Pydantic** - 数据验证与序列化
+- **AKShare** - A 股金融数据接口
+- **MiniMax API** - 大型语言模型与搜索服务
+- **Uvicorn** - ASGI 服务器
+- **Trafilatura** - 网页内容提取
+- **Pandas** - 数据处理
 
-```python
-"templates": [
-    "{stock_code} {stock_name} financial results quarterly",
-    "{stock_code} {stock_name} revenue profit margin",
-    # 添加更多自定义模板
-]
-```
+### 前端
 
-### 调整LLM参数
+- **React 18** - UI 框架
+- **TypeScript** - 类型安全
+- **Ant Design 5** - UI 组件库
+- **Vite** - 构建工具
+- **Axios** - HTTP 客戶端
+- **React Router** - 路由管理
+- **Recharts** - 图表库
+- **React Markdown** - Markdown 渲染
 
-可以在`config.py`中修改LLM相关参数，以控制分析的深度和创造性：
+## 截图
 
-```python
-"LLM": {
-    "API_KEY": os.getenv("LLM_API_KEY"),
-    "BASE_URL": "https://api.minimaxi.com/v1",
-    "MODEL": "MiniMax-M2.7-highspeed",
-    "TEMPERATURE": 0.7,  # 调低更保守，调高更有创造性
-    "MAX_TOKENS": 8192,
-    # 更多参数
-}
-```
+<!-- TODO: 添加 Dashboard 截图 -->
+<!-- TODO: 添加 Quotes 页面截图 -->
+<!-- TODO: 添加 Analysis 页面截图 -->
+<!-- TODO: 添加 Batch Analysis 页面截图 -->
 
-### 自定义风险偏好
+## 开发指南
 
-系统支持三种风险偏好设置，通过`-r`或`--risk`参数指定：
+详细开发文档请参考：
 
-- **low**: 低风险偏好，更注重资金安全和稳定收益
-- **medium**: 中等风险偏好，平衡收益与风险
-- **high**: 高风险偏好，追求高收益，能承受较大波动
+- [系统架构文档](docs/architecture.md)
+- [部署文档](docs/deployment.md)
 
-## 日志与测试
-
-### 日志系统
-
-日志文件位于 `logs/` 目录：
-
-- `logs/app.log` - 应用日志
-- `logs/error.log` - 错误日志
-- `logs/api.log` - API 调用日志
-
-详细规范请参考 [日志系统文档](docs/logging-spec.md)。
-
-### 测试
-
-运行所有测试：
+## 测试
 
 ```bash
+# 后端测试
 pytest tests/ -v
+
+# 前端测试（Playwright E2E）
+cd web
+npm run test
 ```
-
-详细测试规范请参考 [测试用例库文档](docs/testing-spec.md)。
-
-## 常见问题
-
-1. **搜索引擎访问受限**：可能需要使用代理或降低请求频率
-2. **网页爬取失败**：部分网站可能有反爬机制，可尝试调整headers或使用备用方法
-3. **分析不够深入**：可以尝试修改提示词模板或增加搜索范围
-4. **API密钥问题**：确保已设置正确的LLM_API_KEY环境变量或在.env文件中配置
 
 ## 贡献指南
 
-欢迎提交Pull Request或Issue！贡献前请确保：
+欢迎提交 Pull Request！请参考 [CONTRIBUTING.md](CONTRIBUTING.md)
 
-1. 代码风格符合PEP 8
-2. 添加适当的注释和文档
-3. 所有测试通过
+## License
 
-## 许可证
-
-MIT License
+MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 免责声明
 
-本工具仅供研究和参考，不构成投资建议。投资有风险，决策需谨慎。用户应当根据自身情况做出判断，项目作者不对因使用本工具产生的任何损失负责。 
+本工具仅供研究和参考，不构成投资建议。投资有风险，决策需谨慎。

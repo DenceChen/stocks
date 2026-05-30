@@ -4,7 +4,6 @@ import { LineChartOutlined, LoadingOutlined, DownOutlined, RightOutlined } from 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../services/api'
-import { addHistory } from '../services/history'
 
 const { Option } = Select
 
@@ -86,17 +85,6 @@ export default function MarketAnalysis() {
             setSources(doneSources)
             setProcessingTime(doneTime)
             setLoading(false); setStage(null); setStageDetail(null)
-            addHistory({
-              stock_code: '-',
-              stock_name: '市场分析',
-              type: 'market',
-              risk_preference: currentRisk,
-              timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
-              summary: streamingText.slice(0, 200) + '...',
-              full_content: streamingText,
-              processing_time: doneTime,
-              sources: doneSources,
-            })
             break
           case 'error':
             setError(event.data.message || '分析失败')
